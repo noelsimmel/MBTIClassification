@@ -9,6 +9,7 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+data/
 develop-eggs/
 dist/
 downloads/
@@ -39,6 +40,7 @@ pip-delete-this-directory.txt
 
 # Unit test / coverage reports
 htmlcov/
+*.log
 .tox/
 .nox/
 .coverage
@@ -119,6 +121,7 @@ venv.bak/
 
 # mkdocs documentation
 /site
+*.pdf
 
 # mypy
 .mypy_cache/
