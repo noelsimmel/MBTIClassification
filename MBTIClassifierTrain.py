@@ -52,21 +52,27 @@ class MBTIClassifierTrain:
     def split_dataset(self, fn):
         '''
         Liest die Daten ein und teilt sie in Trainings-, Validierungs- und 
-        Testdaten im Verhältnis ca. 70:10:20 auf. \n
+        Testdaten auf. \n
 
         **Parameter:** \n
         fn (str): Dateiname/Pfad der Eingabedaten.
         '''
 
+        # Daten einlesen und vorverarbeiten
         data = self._preprocess(fn)
+
         # Zunächst in Trainings- und Testdaten aufsplitten
         # Stratifizieren, d.h. beim Splitten soll das Klassenverhältnis 
-        # erhalten bleiben (da die Klassen sehr ungleich verteilt sind)
-        temp, test = train_test_split(data, test_size=0.2, stratify=data['mbti'])
-        # Aus den Trainingsdaten 10% für Validierungsdaten abzweigen
-        train, val = train_test_split(temp, test_size=0.1, stratify=temp['mbti'])
-        
+        # erhalten bleiben (da die Klassen sehr ungleich verteilt sind).
+        # Das Verhältnis 70:10:20 ließ sich aufgrund des kleinen Datensatzes
+        # nicht einhalten, da sonst nicht alle Klassen überall enthalten wären.
+        # Bei 60:19:21 enthält jedes Datenset alle 16 Klassen.
+        temp, test = train_test_split(data, test_size=0.21, stratify=data['mbti'])
+        # Aus den Trainingsdaten die Validierungsdaten abzweigen
+        train, val = train_test_split(temp, test_size=0.24, stratify=temp['mbti'])
 
+        # TODO: Trainingsdaten oversamplen, da sonst 50% der Klassen <10 mal vertreten sind
+        return train, val, test
 
     def extract_features(self):
         pass
