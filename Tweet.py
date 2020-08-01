@@ -31,8 +31,8 @@ class Tweet:
         except TypeError:
             return 0
 
-    # def __contains__(self, token):
-    #     return token in self.tokens
+    def __contains__(self, query):
+        return query in self.text
 
     def _instantiate(self, status):
         '''
