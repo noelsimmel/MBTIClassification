@@ -1,5 +1,6 @@
 # Modul: PRO2-A, SS 2020
-# Projekt: Author profiling – Twitter & MBTI personality types
+# Projekt: Author profiling – Twitter & MBTI personality 
+# Datei: TwitterClasses.py – Enthält 2 Klassen zur Darstellungen von Tweets und Usern
 # Autor*in: Noel Simmel (791794)
 # Abgabe: 31.08.20
 
@@ -11,9 +12,6 @@ class Tweet:
     '''
 
     def __init__(self, status):
-        '''
-        '''
-
         self.id = None
         self.text = None
         self.hashtags_count = self.mentions_count = 0
@@ -74,9 +72,6 @@ class User:
     '''
 
     def __init__(self, user):
-        '''
-        '''
-
         self.id = None
         self.description = ""
         # friends_count = Anzahl an Accounts, denen die Person folgt
