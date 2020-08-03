@@ -1,5 +1,6 @@
 # Modul: PRO2-A, SS 2020
 # Projekt: Author profiling – Twitter & MBTI personality types
+# Datei: MBTIClassifierTrain.py – Trainiert einen Klassifikator basierend auf einem Twitter-Korpus
 # Autor*in: Noel Simmel (791794)
 # Abgabe: 31.08.20
 
@@ -9,13 +10,17 @@
 # 'ENTJ': 14, 'INFJ': 48, 'ENFP': 40, 'INTP': 60, 'ISFP': 16, 'ESTP': 5, 'ISFJ': 10, 
 # 'ESFJ': 8, 'ESTJ': 4, 'ESFP': 3}
 
-import dotenv
+# Standardmodule
+from collections import namedtuple
 import logging
 import os
+# Externe Module
+import dotenv
 import pandas as pd
-import tweepy
 from sklearn.model_selection import train_test_split
-from Tweet import Tweet
+import tweepy
+# Eigene Klassen
+from TwitterClasses import Tweet, User
 
 class MBTIClassifierTrain:
     '''
@@ -32,6 +37,13 @@ class MBTIClassifierTrain:
         input_filename (str): Dateiname/Pfad der Eingabedaten im json-Format.
         output_filename (str): Name der Datei, in welche die Features gespeichert werden sollen.
         '''
+
+        # Credentials aus .env-Datei laden. Mehr Info: https://bit.ly/3glK6fd 
+        dotenv.load_dotenv('.env')
+        auth = tweepy.OAuthHandler(os.environ.get('CONSUMER_KEY'), os.environ.get('CONSUMER_SECRET'))
+        auth.set_access_token(os.environ.get('ACCESS_KEY'), os.environ.get('ACCESS_SECRET'))
+        # Verbindung zur Twitter-API herstellen
+        self.api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
 
         self.train_data, self.val_data, self.test_data = self.split_dataset(input_filename)
         self.train(self.train_data)
@@ -86,25 +98,53 @@ class MBTIClassifierTrain:
         '''
 
         try:
-            # Credentials aus .env-Datei laden. Mehr Info: https://bit.ly/3glK6fd 
-            dotenv.load_dotenv('.env')
-            auth = tweepy.OAuthHandler(os.environ.get('CONSUMER_KEY'), os.environ.get('CONSUMER_SECRET'))
-            auth.set_access_token(os.environ.get('ACCESS_KEY'), os.environ.get('ACCESS_SECRET'))
-            # Verbindung zur Twitter-API herstellen
-            api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
-
             # Wenn Account privat ist, leere Liste zurückgeben
-            if api.get_user(user_id=row.user_id).protected:
+            if self.api.get_user(user_id=row.user_id).protected:
                 return []
 
             # Tweets downloaden
             # tweet_objects ist eine Liste von status-Objekten der Twitter-API
-            tweet_objects = api.statuses_lookup(row.tweet_ids, include_entities=True, trim_user=True)
+            tweet_objects = self.api.statuses_lookup(row.tweet_ids, include_entities=True, trim_user=True)
             tweets = [Tweet(t) for t in tweet_objects]     
             return tweets
         # Nicht existierende Accounts abfangen
         except tweepy.error.TweepError:
             return []
+
+    def _get_twitter_statistics(self, row):
+        '''
+        '''
+
+        # 1. User-Statistiken (aus dem Profil extrahieren)
+        user = User(self.api.get_user(user_id=row.user_id))
+
+        # 2. Tweet-Statistiken (aus den heruntergeladenen Tweets extrahieren)
+        tweet_number = len(row.tweets)
+        # rate = Absolute Häufigkeit des Attributes / Anzahl an Tweets für diese*n User
+        hashtags_rate = sum(t.hashtags_count for t in row.tweets) / tweet_number
+        mentions_rate = sum(t.mentions_count for t in row.tweets) / tweet_number
+        favs_rate = sum(t.fav_count for t in row.tweets) / tweet_number
+        rts_rate = sum(t.rt_count for t in row.tweets) / tweet_number
+        # ll = likelihood = Wie viel % der Tweets dieses Attribut hatten
+        # Da diese Attribute binär sind
+        # d.h. rts_rate ist die durchschnittliche Anzahl an RTs, die ein Tweet
+        # dieser/s Users bekommt, retweeting_rate ist die Likelihood, dass ein
+        # Tweet auf dem Profil ein RT von einer/m anderen User ist
+        media_ll = sum(t.has_media for t in row.tweets) / tweet_number
+        url_ll = sum(t.has_url for t in row.tweets) / tweet_number
+        replying_rate = sum(t.is_reply for t in row.tweets) / tweet_number
+        retweeting_rate = sum(t.is_retweet for t in row.tweets) / tweet_number
+
+        # Alles als namedtuple speichern und zurückgeben
+        field_names = ['description', 'followers_c', 'friends_c', 'fav_c', 'tweets_c',
+                       'is_verified', 'profile_url', 'hashtags_r', 'mentions_r', 'favs_r', 
+                       'rts_r', 'media_l', 'url_l', 'reply_l', 'rt_l']
+        TwitterStatistics = namedtuple('TwitterStatistics', field_names)
+        stats = TwitterStatistics(user.description, user.followers_count, user.friends_count,
+                                  user.fav_count, user.statuses_count, user.is_verified, 
+                                  user.has_profile_url, hashtags_rate, mentions_rate, favs_rate,
+                                  rts_rate, media_ll, url_ll, replying_rate, retweeting_rate)
+        return stats
     
     def extract_features(self, df):
         '''
@@ -121,10 +161,16 @@ class MBTIClassifierTrain:
         features.at[1, 'user_id'] = 202324814
         features.at[1, 'tweet_ids'] = ['145982462084907008', '145990139867439105', '145991339677454337', '145993360832864256', '145997613878083585', '145999198079299584', '146628056151371776', '146749783393042432', '146751041998827520', '146752027337293824', '146887484435996672', '147021766575927297', '148522442917294081', '148528848886169601', '148739591002800129', '149561269085683712', '150351650165493761', '150356522998829060', '150357323142017024', '150374042719887360', '151016312846565376', '151017315268427776', '151350399905959936', '151374062382358529', '152151739146059776', '152152242286366721', '152154276616085504', '152190349354352641', '152428479185555457', '152527777634058240', '152717365010890752', '152893034776891392', '153981575967674369', '153982287707521024', '153983328935096322', '154206380725764097', '154678318757707776', '154683503403995136', '155026941597065217', '155027788091494401', '155028586720534529', '155028822876618753', '155029724920422400', '155031342487306240', '155048115316072448', '155048877609857024', '155049511289487360', '155050982148014080', '155280139620585473', '155283876414099457', '155287039712034819', '155287813355601920', '155289921245028352', '155432187792076800', '155461102866661376', '155462652137713664', '155463585454231552', '155464253728489473', '155465562603012096', '155475553724534785', '155489145282760705', '155489960835813379', '155798049019527168', '155825260065865728', '155828311736590337', '155829329211817984', '155830443080548352', '155831692572114944', '155833002344189952', '155833934641496065', '155836275801337858', '155837957096480768', '155839209888944128', '155839524663074817', '155840415965261824', '156137443672854528', '156137583292841984', '156138995070402560', '156526770840027136', '156767294901583872', '156772414380974081', '156801089465884672', '156819203796647936', '156852872221442048', '156858662638469120', '156886835124117504', '157086215273844739', '157171587018272768', '157584455735844865', '157595875219226624', '157596567757524992', '157877288594182144', '157893631573893122', '157896126568206336', '157990660237033472', '158590630942089217', '158597079294423040', '158600049067163649', '158608245836091392', '158609387332710400']
 
+        # Tweets pro Zeile herunterladen und als Liste in neuer Spalte speichern
         full_tweets = features.apply(self._download_tweets, axis=1)
         features = features.assign(tweets=full_tweets.values)
+
+        # Metadaten aus Userprofil und Tweets ziehen, 15 neue Spalten erstellen
+        twitter_stats = features.apply(self._get_twitter_statistics, axis=1)
+        twitter_stats_df = pd.DataFrame(list(twitter_stats), columns=twitter_stats[0]._fields)
+        features = pd.concat([features, twitter_stats_df], axis=1)
+
         # TODO: private accs handlen!
-        # TODO: user features
         return features
 
     def train(self, df):
@@ -132,9 +178,6 @@ class MBTIClassifierTrain:
         download, nlp, features, aggregieren
         '''
 
-        # Dataframe kopieren, fortlaufenden Index einfügen
-        # model = df.reset_index()
-        # model['tweet'] = model1.apply(lambda row: row['tweet_ids'][0], axis=1)
         features = self.extract_features(df)
         print(features)
 
@@ -157,5 +200,6 @@ class MBTIClassifierTrain:
 
 
 if __name__ == '__main__':
-    f = 'data/TwiSty-DE.json'
+    # pd.set_option('display.max_columns', None)
+    f = 'C:/Users/Natze/Documents/Uni/Computerlinguistik/6.Semester/MBTIClassification/data/TwiSty-DE.json'
     clf = MBTIClassifierTrain(f, 'test.csv')
