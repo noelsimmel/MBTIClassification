@@ -136,9 +136,9 @@ class MBTIClassifierTrain:
         retweeting_rate = sum(t.is_retweet for t in row.tweets) / tweet_number
 
         # Alles als namedtuple speichern und zurückgeben
-        field_names = ['description', 'followers_c', 'friends_c', 'fav_c', 'tweets_c',
-                       'is_verified', 'profile_url', 'hashtags_r', 'mentions_r', 'favs_r', 
-                       'rts_r', 'media_l', 'url_l', 'reply_l', 'rt_l']
+        field_names = ['description', 'followers', 'friends', 'fav', 'tweets',
+                       'is_verified', 'profile_url', 'hashtags', 'mentions', 'favs', 
+                       'rts', 'media_l', 'url_l', 'reply_l', 'rt_l']
         TwitterStatistics = namedtuple('TwitterStatistics', field_names)
         stats = TwitterStatistics(user.description, user.followers_count, user.friends_count,
                                   user.fav_count, user.statuses_count, user.is_verified, 
