@@ -146,6 +146,30 @@ class MBTIClassifierTrain:
                                   rts_rate, media_ll, url_ll, replying_rate, retweeting_rate)
         return stats
     
+    def _get_linguistic_features(self, row):
+        '''
+        '''
+
+        tweet_number = len(row.tweets)
+        # chars = sum(len(t) for t in row.tweets) / tweet_number
+        for t in row.tweets:
+            sents = self.__sentence_split(t)
+            tokens = self.__tokenize(t)
+            pos = self.__pos_tag(t)
+            lemma = self.__lemmatize(t)
+            named_entities = self.__named_entity_recognition(t)
+            
+
+        # Alles als namedtuple speichern und zurückgeben
+        field_names = ['chars', 'letters', 'capitals', 'numbers', 'special_chars', 
+                       'punctuation', 'questions', 'exclamations', 'words', 'word_length',
+                       'long_words', 'emoticons', 'emoji', 'typos', 'type_token_ratio',
+                       'hapax_legomena', 'sentences', 'sentence_length', 'pos', 
+                       'sentiment', 'named_entities']
+        LingStatistics = namedtuple('LingStatistics', field_names)
+        stats = ()
+        return stats
+    
     def extract_features(self, df):
         '''
         '''
@@ -169,6 +193,9 @@ class MBTIClassifierTrain:
         twitter_stats = features.apply(self._get_twitter_statistics, axis=1)
         twitter_stats_df = pd.DataFrame(list(twitter_stats), columns=twitter_stats[0]._fields)
         features = pd.concat([features, twitter_stats_df], axis=1)
+
+        # Linguistische Features bestimmen
+        ling_features = features.apply(self._get_linguistic_features, axis=1)
 
         # TODO: private accs handlen!
         return features
