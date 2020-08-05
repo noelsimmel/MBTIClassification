@@ -38,8 +38,6 @@ class MBTIClassifierTrain:
         output_filename (str): Name der Datei, in welche die Features gespeichert werden sollen.
         '''
 
-        self.output_filename = output_filename
-
         # Credentials aus .env-Datei laden. Mehr Info: https://bit.ly/3glK6fd 
         dotenv.load_dotenv('.env')
         auth = tweepy.OAuthHandler(os.environ.get('CONSUMER_KEY'), os.environ.get('CONSUMER_SECRET'))
@@ -48,7 +46,7 @@ class MBTIClassifierTrain:
         self.api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
 
         self.train_data, self.val_data, self.test_data = self.split_dataset(input_filename)
-        self.train(self.train_data)
+        self.train(self.train_data, output_filename)
 
     def _preprocess(self, fn):
         '''
@@ -209,16 +207,48 @@ class MBTIClassifierTrain:
         # TODO: private accs handlen!
         return features
 
-    def train(self, df):
+    def _aggregate_features(self, df):
+        '''
+        Aggregiert die Features in einem DataFrame für alle Klassen. Da alle Features 
+        numerisch sind, wird jeweils der Durchschnitt über alle Instanzen einer Klasse gebildet.
+
+        **Parameter:** \n
+        df (DataFrame): Enthält für jede Instanz (User) alle berechneten Features (Ergebnis von 
+        extract_features).
+
+        **Returns:** \n
+        DataFrame mit |Klassen| Zeilen und |Features| Spalten. Hat weniger Spalten als Input-DF, 
+        da z.B. User-ID und Tweets gedroppt werden.
+        '''
+
+        # Überflüssige Spalten löschen
+        features = df.drop(columns=['index', 'user_id', 'tweet_ids', 'tweets', 'description'])
+        # agg_features soll die aggregierten Features für jede Klasse enthalten
+        agg_features = pd.DataFrame(columns=features.columns)
+
+        # Für jede Klasse aggregieren
+        for t in features.mbti.unique():
+            mbti = features[features.mbti == t]
+            # pd.agg erstellt einen neuen DF mit den Durchschnittswerten aller Spalten
+            mbti_aggregated = mbti.agg(['mean'])
+            # Am Anfang des DF eine Spalte mit dem MBTI-Typ einfügen
+            mbti_aggregated.insert(loc=0, column='mbti', value=t)
+            # An agg_features anhängen
+            agg_features = agg_features.append(mbti_aggregated, ignore_index=True)
+
+        return agg_features
+
+    def train(self, df, output_filename):
         '''
         ((download, nlp, features, aggregieren))
         '''
 
         features = self.extract_features(df)
-        print(features)
-
-    def save_features(self):
-        pass
+        # print(features)
+        agg_features = self._aggregate_features(features)
+        print(agg_features)
+        # Aggregierte Features in tsv-Datei schreiben
+        agg_features.to_csv(output_filename, sep='\t')
 
     def validate(self):
         '''
@@ -239,4 +269,4 @@ if __name__ == '__main__':
     pd.set_option('display.max_columns', None)
     # pd.set_option('display.max_colwidth', None)
     f = 'C:/Users/Natze/Documents/Uni/Computerlinguistik/6.Semester/MBTIClassification/data/TwiSty-DE.json'
-    clf = MBTIClassifierTrain(f, 'test.csv')
+    clf = MBTIClassifierTrain(f, 'test.tsv')
