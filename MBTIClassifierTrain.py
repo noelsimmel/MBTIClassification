@@ -38,6 +38,8 @@ class MBTIClassifierTrain:
         output_filename (str): Name der Datei, in welche die Features gespeichert werden sollen.
         '''
 
+        self.output_filename = output_filename
+
         # Credentials aus .env-Datei laden. Mehr Info: https://bit.ly/3glK6fd 
         dotenv.load_dotenv('.env')
         auth = tweepy.OAuthHandler(os.environ.get('CONSUMER_KEY'), os.environ.get('CONSUMER_SECRET'))
@@ -136,38 +138,43 @@ class MBTIClassifierTrain:
         retweeting_rate = sum(t.is_retweet for t in row.tweets) / tweet_number
 
         # Alles als namedtuple speichern und zurückgeben
-        field_names = ['description', 'followers', 'friends', 'fav', 'tweets',
-                       'is_verified', 'profile_url', 'hashtags', 'mentions', 'favs', 
-                       'rts', 'media_l', 'url_l', 'reply_l', 'rt_l']
+        field_names = ['description', 'followers', 'friends', 'tweet_count', 'is_verified', 
+                       'profile_url', 'hashtags', 'mentions', 'favs', 'rts', 'media_l', 
+                       'url_l', 'reply_l', 'rt_l']
         TwitterStatistics = namedtuple('TwitterStatistics', field_names)
         stats = TwitterStatistics(user.description, user.followers_count, user.friends_count,
-                                  user.fav_count, user.statuses_count, user.is_verified, 
-                                  user.has_profile_url, hashtags_rate, mentions_rate, favs_rate,
-                                  rts_rate, media_ll, url_ll, replying_rate, retweeting_rate)
+                                  user.statuses_count, user.is_verified, user.has_profile_url, 
+                                  hashtags_rate, mentions_rate, favs_rate, rts_rate, 
+                                  media_ll, url_ll, replying_rate, retweeting_rate)
         return stats
     
     def _get_linguistic_features(self, row):
         '''
+        ((Zuerst als Test ein paar einfache Features extrahieren))
         '''
 
         tweet_number = len(row.tweets)
-        # chars = sum(len(t) for t in row.tweets) / tweet_number
-        for t in row.tweets:
-            sents = self.__sentence_split(t)
-            tokens = self.__tokenize(t)
-            pos = self.__pos_tag(t)
-            lemma = self.__lemmatize(t)
-            named_entities = self.__named_entity_recognition(t)
-            
+        # for t in row.tweets:
+            # sents = self.__sentence_split(t)
+            # tokens = self.__tokenize(t)
+            # pos = self.__pos_tag(t)
+            # lemma = self.__lemmatize(t)
+            # named_entities = self.__named_entity_recognition(t)
+
+        length = sum(len(t.text) for t in row.tweets) / tweet_number
+        tokens = sum(len(t.text.split()) for t in row.tweets) / tweet_number
+        questions = sum(t.text.count('?')/len(t.text) for t in row.tweets) / tweet_number
+        exclamations = sum(t.text.count('!')/len(t.text) for t in row.tweets) / tweet_number
 
         # Alles als namedtuple speichern und zurückgeben
-        field_names = ['chars', 'letters', 'capitals', 'numbers', 'special_chars', 
-                       'punctuation', 'questions', 'exclamations', 'words', 'word_length',
-                       'long_words', 'emoticons', 'emoji', 'typos', 'type_token_ratio',
-                       'hapax_legomena', 'sentences', 'sentence_length', 'pos', 
-                       'sentiment', 'named_entities']
+        # field_names = ['chars', 'letters', 'capitals', 'numbers', 'special_chars', 
+        #                'punctuation', 'questions', 'exclamations', 'words', 'word_length',
+        #                'long_words', 'emoticons', 'emoji', 'typos', 'type_token_ratio',
+        #                'hapax_legomena', 'sentences', 'sentence_length', 'pos', 
+        #                'sentiment', 'named_entities']
+        field_names = ['length', 'tokens', 'questions', 'exclamations']
         LingStatistics = namedtuple('LingStatistics', field_names)
-        stats = ()
+        stats = LingStatistics(length, tokens, questions, exclamations)
         return stats
     
     def extract_features(self, df):
@@ -196,13 +203,15 @@ class MBTIClassifierTrain:
 
         # Linguistische Features bestimmen
         ling_features = features.apply(self._get_linguistic_features, axis=1)
+        ling_stats_df = pd.DataFrame(list(ling_features), columns=ling_features[0]._fields)
+        features = pd.concat([features, ling_stats_df], axis=1)
 
         # TODO: private accs handlen!
         return features
 
     def train(self, df):
         '''
-        download, nlp, features, aggregieren
+        ((download, nlp, features, aggregieren))
         '''
 
         features = self.extract_features(df)
@@ -227,6 +236,7 @@ class MBTIClassifierTrain:
 
 
 if __name__ == '__main__':
-    # pd.set_option('display.max_columns', None)
+    pd.set_option('display.max_columns', None)
+    # pd.set_option('display.max_colwidth', None)
     f = 'C:/Users/Natze/Documents/Uni/Computerlinguistik/6.Semester/MBTIClassification/data/TwiSty-DE.json'
     clf = MBTIClassifierTrain(f, 'test.csv')
