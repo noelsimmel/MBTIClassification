@@ -76,7 +76,7 @@ class User:
         self.description = ""
         # friends_count = Anzahl an Accounts, denen die Person folgt
         # statuses_count = Anzahl an Tweets (ein Tweet wird intern "status" genannt)
-        self.followers_count = self.friends_count = self.fav_count = self.statuses_count = 0
+        self.followers_count = self.friends_count = self.statuses_count = 0
         # has_profile_url = Ob im Profil eine URL angegeben wurde
         self.is_verified = self.has_profile_url = False
         
@@ -95,7 +95,6 @@ class User:
             self.description = user.description
         self.followers_count = user.followers_count
         self.friends_count = user.friends_count
-        self.fav_count = user.favourites_count
         self.statuses_count = user.statuses_count
         self.is_verified = user.verified
         if user.url:
