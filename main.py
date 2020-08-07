@@ -30,7 +30,7 @@ def main(args):
         # Klassifikator mit Trainingsdaten instantiieren
         # Die Features werden in feature_filename gespeichert und können im 
         # Inferenzschritt daraus eingelesen werden
-        clf = MBTIClassifier(data_filename, feature_filename)
+        clf = MBTIClassifier(data_filename, feature_filename, train=True)
         clf.train()
         clf.evaluate()
 
