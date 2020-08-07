@@ -29,13 +29,14 @@ class MBTIClassifier:
     für die Inferenz in eine separate Datei gespeichert.
     '''
 
-    def __init__(self, input_filename, output_filename):
+    def __init__(self, input_filename, features_filename):
         '''
         Konstruktor. \n
 
         **Parameter**: \n
         input_filename (str): Dateiname/Pfad der Eingabedaten im json-Format.
-        output_filename (str): Name der Datei, in welche die Features gespeichert werden sollen.
+        features_filename (str): Name der tsv-Datei, in welche die Features gespeichert werden 
+        sollen (Training) bzw. aus welcher sie gelesen werden sollen (Inferenz).
         '''
 
         # Credentials aus .env-Datei laden. Mehr Info: https://bit.ly/3glK6fd 
@@ -46,7 +47,7 @@ class MBTIClassifier:
         self.api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
 
         self.train_data, self.val_data, self.test_data = self.split_dataset(input_filename)
-        self.train(self.train_data, output_filename)
+        self.train(self.train_data, features_filename)
 
     def _preprocess(self, fn):
         '''
