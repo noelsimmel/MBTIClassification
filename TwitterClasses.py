@@ -74,9 +74,9 @@ class User:
     def __init__(self, user):
         self.id = None
         self.description = ""
-        # friends_count = Anzahl an Accounts, denen die Person folgt
-        # statuses_count = Anzahl an Tweets (ein Tweet wird intern "status" genannt)
-        self.followers_count = self.friends_count = self.statuses_count = 0
+        # followers_friends_ratio = |Followers|/|Friends|
+        # friends sind Accounts, denen ein User folgt. Wenn 0, setze ratio auf |Followers|
+        self.followers_friends_ratio = 0.0
         # has_profile_url = Ob im Profil eine URL angegeben wurde
         self.is_verified = self.has_profile_url = False
         
@@ -93,9 +93,10 @@ class User:
         self.id = user.id
         if user.description:
             self.description = user.description
-        self.followers_count = user.followers_count
-        self.friends_count = user.friends_count
-        self.statuses_count = user.statuses_count
+        if user.friends_count == 0:
+            self.followers_friends_ratio = user.followers_count
+        else:
+            self.followers_friends_ratio = user.followers_count/user.friends_count
         self.is_verified = user.verified
         if user.url:
             self.has_profile_url = True

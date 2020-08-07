@@ -138,12 +138,12 @@ class MBTIClassifier:
         retweeting_rate = sum(t.is_retweet for t in row.tweets) / tweet_number
 
         # Alles als namedtuple speichern und zurückgeben
-        field_names = ['description', 'followers', 'friends', 'tweet_count', 'is_verified', 
-                       'profile_url', 'hashtags', 'mentions', 'favs', 'rts', 'media_l', 
-                       'url_l', 'reply_l', 'rt_l']
+        field_names = ['description', 'followers_friends_ratio', 'is_verified', 
+                       'has_profile_url', 'hashtags', 'mentions', 'favs', 'rts', 
+                       'media_l', 'url_l', 'reply_l', 'rt_l']
         TwitterStatistics = namedtuple('TwitterStatistics', field_names)
-        stats = TwitterStatistics(user.description, user.followers_count, user.friends_count,
-                                  user.statuses_count, user.is_verified, user.has_profile_url, 
+        stats = TwitterStatistics(user.description, user.followers_friends_ratio,
+                                  user.is_verified, user.has_profile_url, 
                                   hashtags_rate, mentions_rate, favs_rate, rts_rate, 
                                   media_ll, url_ll, replying_rate, retweeting_rate)
         return stats
@@ -245,12 +245,13 @@ class MBTIClassifier:
         ((download, nlp, features, aggregieren))
         '''
 
+        # Features aus Trainingsdaten extrahieren
         features = self.extract_features(df)
-        # print(features)
+        # Features aggregieren, d.h. für jede Klasse über alle Instanzen mitteln
         agg_features = self._aggregate_features(features)
-        print(agg_features)
         # Aggregierte Features in tsv-Datei schreiben
         agg_features.to_csv(output_filename, sep='\t')
+        return agg_features
 
     def predict(self):
         pass
@@ -277,4 +278,4 @@ if __name__ == '__main__':
     pd.set_option('display.max_columns', None)
     # pd.set_option('display.max_colwidth', None)
     f = 'C:/Users/Natze/Documents/Uni/Computerlinguistik/6.Semester/MBTIClassification/data/TwiSty-DE.json'
-    clf = MBTIClassifier(f, 'test.tsv')
+    clf = MBTIClassifier(f, 'test.tsv', train=True)
