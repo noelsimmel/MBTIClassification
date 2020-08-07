@@ -5,7 +5,6 @@
 
 import sys
 from MBTIClassifier import MBTIClassifier
-from MBTIClassifierTrain import MBTIClassifierTrain 
 
 def main(args):
     '''
@@ -28,13 +27,17 @@ def main(args):
     # Training
     if len(args) == 4 and args[3] == '-t':
         print("TRAINING")
-        clf = MBTIClassifierTrain(data_filename, feature_filename)
+        # Klassifikator mit Trainingsdaten instantiieren
+        # Die Features werden in feature_filename gespeichert und können im 
+        # Inferenzschritt daraus eingelesen werden
+        clf = MBTIClassifier(data_filename, feature_filename, train=True)
         clf.train()
         clf.evaluate()
 
     # Inferenz
     else:
         print("INFERENZ")
+        # Klassifikator mit echten Daten und Features-Datei instantiieren
         clf = MBTIClassifier(data_filename, feature_filename)
         clf.predict()
 
