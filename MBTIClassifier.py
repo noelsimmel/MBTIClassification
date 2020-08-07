@@ -22,7 +22,7 @@ import tweepy
 # Eigene Klassen
 from TwitterClasses import Tweet, User
 
-class MBTIClassifierTrain:
+class MBTIClassifier:
     '''
     Trainingsklasse für den Klassifikator. 
     Aus den Trainingsdaten werden relevante Features extrahiert, aggregiert und 
@@ -275,4 +275,4 @@ if __name__ == '__main__':
     pd.set_option('display.max_columns', None)
     # pd.set_option('display.max_colwidth', None)
     f = 'C:/Users/Natze/Documents/Uni/Computerlinguistik/6.Semester/MBTIClassification/data/TwiSty-DE.json'
-    clf = MBTIClassifierTrain(f, 'test.tsv')
+    clf = MBTIClassifier(f, 'test.tsv')
