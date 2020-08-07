@@ -250,6 +250,12 @@ class MBTIClassifierTrain:
         # Aggregierte Features in tsv-Datei schreiben
         agg_features.to_csv(output_filename, sep='\t')
 
+    def predict(self):
+        pass
+
+    def output_prediction(self):
+        pass
+
     def validate(self):
         '''
         Validiert den Klassifikator auf dem Datenset für die Validierung.
