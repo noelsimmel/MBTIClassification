@@ -29,7 +29,7 @@ class MBTIClassifier:
     für die Inferenz in eine separate Datei gespeichert.
     '''
 
-    def __init__(self, input_filename, features_filename):
+    def __init__(self, input_filename, features_filename, train=False):
         '''
         Konstruktor. \n
 
@@ -46,8 +46,9 @@ class MBTIClassifier:
         # Verbindung zur Twitter-API herstellen
         self.api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
 
-        self.train_data, self.val_data, self.test_data = self.split_dataset(input_filename)
-        self.train(self.train_data, features_filename)
+        if train:
+            self.train_data, self.val_data, self.test_data = self.split_dataset(input_filename)
+            self.train(self.train_data, features_filename)
 
     def _preprocess(self, fn):
         '''
