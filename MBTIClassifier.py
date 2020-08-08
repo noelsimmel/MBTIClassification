@@ -57,8 +57,10 @@ class MBTIClassifier:
 
         if train:
             self.train_data, self.val_data, self.test_data = self.split_dataset(input_filename)
-            features = self.train(self.train_data, features_filename)
-            self.evaluate(self.test_data, features)
+            # model = self.train(self.train_data, features_filename)
+            model = pd.read_csv("features_smalldataset.tsv", sep='\t', index_col=0) # Achtung: Data leak
+            # print(model)
+            self.evaluate(self.test_data, model)
 
     def _preprocess(self, fn):
         '''
@@ -103,8 +105,8 @@ class MBTIClassifier:
         temp, test = train_test_split(data, test_size=0.21, stratify=data['mbti'])
         # Aus den Trainingsdaten die Validierungsdaten abzweigen
         train, val = train_test_split(temp, test_size=0.24, stratify=temp['mbti'])
-        logger.info(f"Datensatz in Train/Val/Test gesplittet, \
-                      Verhältnis {(len(train)/len(data)):.2f}/{(len(val)/len(data)):.2f}/{(len(test)/len(data)):.2f}")
+        logger.info(f"Datensatz in Train/Val/Test gesplittet, Verhältnis \
+             {(len(train)/len(data)):.2f}/{(len(val)/len(data)):.2f}/{(len(test)/len(data)):.2f}")
 
         # TODO: Trainingsdaten oversamplen, da sonst 50% der Klassen <10 mal vertreten sind
         return train, val, test
@@ -228,29 +230,19 @@ class MBTIClassifier:
         if len(features) < old_len:
             logger.warning(f"{(old_len-len(features))} nicht verfügbare User gelöscht (jetzt noch {len(features)} Zeilen)")
 
-        print("RAW DATA")
-        print(features.head())
-
         # Metadaten aus Userprofil und Tweets ziehen, 12 neue Spalten erstellen
         twitter_stats = features.apply(self._get_twitter_statistics, axis=1)
         twitter_stats_df = pd.DataFrame(list(twitter_stats), columns=twitter_stats[0]._fields)
         features = pd.concat([features, twitter_stats_df], axis=1)
-
-        print("TWITTER STATS")
-        print(features.head())
-        # return features
 
         # Linguistische Features bestimmen
         ling_features = features.apply(self._get_linguistic_features, axis=1)
         ling_stats_df = pd.DataFrame(list(ling_features), columns=ling_features[0]._fields)
         features = pd.concat([features, ling_stats_df], axis=1)
 
-        print("LING STATS")
-        print(features.head())
-
         # TODO: private accs handlen!
         logger.info(f"Ende Feature-Extraktion: DF hat {len(features.columns)} Spalten")
-        return features
+        return features.round(10)
 
     def _aggregate_features(self, df):
         '''
@@ -283,7 +275,7 @@ class MBTIClassifier:
             agg_features = agg_features.append(mbti_aggregated, ignore_index=True)
 
         # TODO: Glätten mit *100 ?
-        return agg_features
+        return agg_features.round(5)
 
     def train(self, df, output_filename):
         '''
@@ -301,39 +293,38 @@ class MBTIClassifier:
         logger.info(f"Ende Training ({len(df)} Zeilen, {len(agg_features.columns)} Spalten)")
         return agg_features
 
-    def predict(self, data, features):
+    def predict(self, data, model):
         '''
         '''
 
         logger.info(f"Beginn Vorhersage ({len(data)} Instanzen)")
         # DF für die Differenzen erstellen, zunächst ohne Spalten
         # Finale Dimensionen: |Instanzen| * |Klassen|
-        # Eine Spalte enthält jeweils die Differenzen der Instanzen zu dieser Gold-Klasse
+        # Eine Spalte enthält jeweils die Differenzen der Instanz zu dieser Gold-Klasse
         differences = pd.DataFrame(0, index=range(len(data)), columns=[])
 
+        # Für Testfall: MBTI-Spalte entfernen
+        if 'mbti' in data: data = data.drop(columns=['mbti'])
+        # data soll so viele Spalten haben wie model ohne MBTI
+        assert data.shape[1] == model.shape[1]-1
+
         # Verschachtelte Liste mit allen Features pro Klasse erstellen
-        gold = features.values.tolist()
+        gold = model.values.tolist()
         # Über alle Gold-Klassen iterieren
         for g in gold:
-            logger.debug(f"Differenz zu Klasse {g} berechnen")
+            logger.debug(f"Differenzen zu Klasse {g} berechnen")
             # Absolute Differenz zwischen dieser Gold-Klasse und den Daten berechnen
-            # Erste Spalte ignorieren, da sie den String mit dem Typ enthält
             # *1, um Rechnung mit Bools möglich zu machen
-            # TODO: richtig slicen
-            print(data, g)
-            diff = abs(data.iloc[:,1:]*1 - g[1:]*1)
+            diff = abs(data*1 - g[1:]*1)
             # Differenzen über alle Spalten aufsummieren und in jeweiliger Spalte speichern
             differences[g[0]] = diff.sum(axis=1)
 
         # Für jede Spalte Klasse mit geringster Differenz/Fehler finden = Vorhersage
         preds = pd.DataFrame(differences.idxmin(axis=1), columns=['prediction'])
-        # Zusätzlich den Fehler speichern
+        # Zusätzlich den Fehler (= Differenz) speichern
         preds['error'] = differences.min(axis=1)
         logger.info(f"Ende Vorhersage ({len(data)} Instanzen)")
-        return preds
-
-    def output_prediction(self):
-        pass
+        return preds.round(5)
 
     def validate(self):
         '''
@@ -342,22 +333,27 @@ class MBTIClassifier:
 
         pass
 
-    def evaluate(self, gold, features):
+    def evaluate(self, gold, model):
         '''
         Testet den Klassifikator auf den Testdaten.
         '''
 
-        logger.info(f"Beginn Evaluierung ({len(gold)} Test-Instanzen, {len(features)} Klassen)")
+        logger.info(f"Beginn Evaluierung ({len(gold)} Test-Instanzen, {len(model)} Klassen)")
         # Testdaten in Feature-Repräsentation umwandeln
         gold_features = self.extract_features(gold)
-        print(gold_features)
+        # Alles droppen außer die MBTI- und Features-Spalten
+        gold_features_only = gold_features.drop(columns=['index', 'user_id', 'tweet_ids', 
+                                                         'tweets', 'description'])
         # Vorhersagen für Gold-Daten erhalten
-        # preds = self.predict(gold, features)
-        # print(preds)
+        logger.info(f"Vorhersage erhalten: \
+            Eingabe-Dimension {gold_features_only.shape}, Modell-Dimension {model.shape}")
+        preds = self.predict(gold_features_only, model)
+        preds.to_csv('predictions.tsv', sep='\t')
+        
         # Accuracy berechnen
-        # ...
-        accuracy = 0.0
-        logger.info(f"Ende Evaluierung (Accuracy: {accuracy}")
+        assert len(preds) == len(gold_features_only)
+        accuracy = sum(preds.prediction == gold_features_only.mbti)/len(gold_features_only)
+        logger.info(f"Ende Evaluierung (Accuracy: {accuracy}, Fehler-Schnitt: {preds.error.mean()})")
 
 
 if __name__ == '__main__':
