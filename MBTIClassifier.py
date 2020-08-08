@@ -348,11 +348,12 @@ class MBTIClassifier:
         logger.info(f"Vorhersage erhalten: \
             Eingabe-Dimension {gold_features_only.shape}, Modell-Dimension {model.shape}")
         preds = self.predict(gold_features_only, model)
+        preds['gold'] = gold_features_only.mbti
         preds.to_csv('predictions.tsv', sep='\t')
         
         # Accuracy berechnen
         assert len(preds) == len(gold_features_only)
-        accuracy = sum(preds.prediction == gold_features_only.mbti)/len(gold_features_only)
+        accuracy = sum(preds.prediction == gold_features_only.mbti)/len(preds)
         logger.info(f"Ende Evaluierung (Accuracy: {accuracy}, Fehler-Schnitt: {preds.error.mean()})")
 
 
