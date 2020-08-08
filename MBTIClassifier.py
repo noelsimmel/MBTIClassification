@@ -58,7 +58,7 @@ class MBTIClassifier:
         if train:
             self.train_data, self.val_data, self.test_data = self.split_dataset(input_filename)
             features = self.train(self.train_data, features_filename)
-            # self.evaluate(self.test_data, features)
+            self.evaluate(self.test_data, features)
 
     def _preprocess(self, fn):
         '''
@@ -157,6 +157,7 @@ class MBTIClassifier:
         media_ll = sum(t.has_media for t in row.tweets) / tweet_number
         url_ll = sum(t.has_url for t in row.tweets) / tweet_number
         replying_rate = sum(t.is_reply for t in row.tweets) / tweet_number
+        # Wird bei TwiSty-Daten immer 0.0 sein, weil sie keine RTs enthalten
         retweeting_rate = sum(t.is_retweet for t in row.tweets) / tweet_number
 
         # Alles als namedtuple speichern und zurückgeben
@@ -222,13 +223,12 @@ class MBTIClassifier:
 
         # Alle Zeilen mit leeren Tweet-Listen löschen (z.B. weil Profil gelöscht wurde)
         old_len = len(features)
-        # features.to_csv("oldfeatures.tsv", sep='\t')
         features = features[features['tweets'].map(lambda d: len(d)) > 0]
         features.reset_index(drop=True, inplace=True)
-        # features.to_csv("newfeatures.tsv", sep='\t')
         if len(features) < old_len:
             logger.warning(f"{(old_len-len(features))} nicht verfügbare User gelöscht (jetzt noch {len(features)} Zeilen)")
 
+        print("RAW DATA")
         print(features.head())
 
         # Metadaten aus Userprofil und Tweets ziehen, 12 neue Spalten erstellen
@@ -236,12 +236,17 @@ class MBTIClassifier:
         twitter_stats_df = pd.DataFrame(list(twitter_stats), columns=twitter_stats[0]._fields)
         features = pd.concat([features, twitter_stats_df], axis=1)
 
+        print("TWITTER STATS")
         print(features.head())
+        # return features
 
         # Linguistische Features bestimmen
         ling_features = features.apply(self._get_linguistic_features, axis=1)
         ling_stats_df = pd.DataFrame(list(ling_features), columns=ling_features[0]._fields)
         features = pd.concat([features, ling_stats_df], axis=1)
+
+        print("LING STATS")
+        print(features.head())
 
         # TODO: private accs handlen!
         logger.info(f"Ende Feature-Extraktion: DF hat {len(features.columns)} Spalten")
@@ -277,6 +282,7 @@ class MBTIClassifier:
             # An agg_features anhängen
             agg_features = agg_features.append(mbti_aggregated, ignore_index=True)
 
+        # TODO: Glätten mit *100 ?
         return agg_features
 
     def train(self, df, output_filename):
@@ -352,6 +358,7 @@ class MBTIClassifier:
         # ...
         accuracy = 0.0
         logger.info(f"Ende Evaluierung (Accuracy: {accuracy}")
+
 
 if __name__ == '__main__':
     pd.set_option('display.max_columns', None)
