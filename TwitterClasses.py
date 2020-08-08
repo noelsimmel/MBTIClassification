@@ -4,6 +4,16 @@
 # Autor*in: Noel Simmel (791794)
 # Abgabe: 31.08.20
 
+import logging
+
+# Logging-Details
+twitter_logger = logging.getLogger(__name__)
+twitter_logger.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(funcName)s:%(message)s')
+file_handler = logging.FileHandler('classifier.log')
+file_handler.setFormatter(formatter)
+twitter_logger.addHandler(file_handler)
+
 class Tweet:
     '''
     Tweet-Klasse. 
@@ -18,7 +28,10 @@ class Tweet:
         self.fav_count = self.rt_count = 0
         self.has_media = self.has_url = self.is_reply = self.is_retweet = False
         
-        self._instantiate(status)
+        try:
+            self._instantiate(status)
+        except Exception as e:
+            twitter_logger.error(f"TWITTER TWEET: {str(e)}")
 
     def __str__(self):
         return self.text
@@ -56,7 +69,7 @@ class Tweet:
         # Zugang zur Twitter-API leider nicht abgefragt werden
         if status.in_reply_to_status_id:
             self.is_reply = True
-        # Speziell für Retweets
+        # Speziell für Retweets. TwiSty enthält allerdings keine Retweets
         if 'retweeted_status' in status._json:
             self.is_retweet = True
             # Text wird durch Voranstellen des Usernamen evtl. abgeschnitten
@@ -83,7 +96,10 @@ class User:
         # has_profile_url = Ob im Profil eine URL angegeben wurde
         self.is_verified = self.has_profile_url = False
         
-        self._instantiate(user)
+        try:
+            self._instantiate(user)
+        except Exception as e:
+            twitter_logger.error(f"TWITTER USER: {str(e)}")
 
     def __str__(self):
         return str(self.id)
