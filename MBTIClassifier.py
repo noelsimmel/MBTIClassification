@@ -67,7 +67,8 @@ class MBTIClassifier:
         # Pro User nur 100 Tweets betrachten, um Twitter-API-Limit nicht zu überschreiten
         # Einige User haben <100 Tweets, s. Report
         for i in range(len(df)):
-            df['tweet_ids'][i] = df['tweet_ids'][i][:100]
+            df['tweet_ids'][i] = df['tweet_ids'][i][:50] # TESTEN
+        df = df[int(len(df)/3):]    # TESTEN
         return df
 
     def split_dataset(self, fn):
@@ -196,10 +197,18 @@ class MBTIClassifier:
         full_tweets = features.apply(self._download_tweets, axis=1)
         features = features.assign(tweets=full_tweets.values)
 
-        # Metadaten aus Userprofil und Tweets ziehen, 15 neue Spalten erstellen
+        # Alle Zeilen mit leeren Tweet-Listen löschen (z.B. weil Profil gelöscht wurde)
+        features = features[features['tweets'].map(lambda d: len(d)) > 0]
+
+        print(features.head())
+
+        # Metadaten aus Userprofil und Tweets ziehen, 12 neue Spalten erstellen
         twitter_stats = features.apply(self._get_twitter_statistics, axis=1)
         twitter_stats_df = pd.DataFrame(list(twitter_stats), columns=twitter_stats[0]._fields)
         features = pd.concat([features, twitter_stats_df], axis=1)
+
+        print(features.head())
+        return features
 
         # Linguistische Features bestimmen
         ling_features = features.apply(self._get_linguistic_features, axis=1)
@@ -253,8 +262,33 @@ class MBTIClassifier:
         agg_features.to_csv(output_filename, sep='\t')
         return agg_features
 
-    def predict(self):
-        pass
+    def predict(self, data, features):
+        '''
+        '''
+
+        # DF für die Differenzen erstellen, zunächst ohne Spalten
+        # Finale Dimensionen: |Instanzen| * |Klassen|
+        # Eine Spalte enthält jeweils die Differenzen der Instanzen zu dieser Gold-Klasse
+        differences = pd.DataFrame(0, index=range(len(data)), columns=[])
+
+        # Verschachtelte Liste mit allen Features erstellen
+        gold = features.values.tolist()
+        # Über alle Gold-Klassen iterieren
+        for g in gold:
+            # Absolute Differenz zwischen dieser Gold-Klasse und den Daten berechnen
+            # Erste Spalte ignorieren, da sie den String mit dem Typ enthält
+            # *1, um Rechnung mit Bools möglich zu machen
+            # TODO: richtig slicen
+            print(data, g)
+            diff = abs(data.iloc[:,1:]*1 - g[1:]*1)
+            # Differenzen über alle Spalten aufsummieren und in jeweiliger Spalte speichern
+            differences[g[0]] = diff.sum(axis=1)
+
+        # Für jede Spalte Klasse mit geringster Differenz/Fehler finden = Vorhersage
+        preds = pd.DataFrame(differences.idxmin(axis=1), columns=['prediction'])
+        # Zusätzlich den Fehler speichern
+        preds['error'] = differences.min(axis=1)
+        return preds
 
     def output_prediction(self):
         pass
