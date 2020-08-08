@@ -48,7 +48,8 @@ class MBTIClassifier:
 
         if train:
             self.train_data, self.val_data, self.test_data = self.split_dataset(input_filename)
-            self.train(self.train_data, features_filename)
+            features = self.train(self.train_data, features_filename)
+            # self.evaluate(self.test_data, features)
 
     def _preprocess(self, fn):
         '''
@@ -300,13 +301,19 @@ class MBTIClassifier:
 
         pass
 
-    def evaluate(self):
+    def evaluate(self, gold, features):
         '''
         Testet den Klassifikator auf den Testdaten.
         '''
 
-        pass
-
+        # Testdaten in Feature-Repräsentation umwandeln
+        gold_features = self.extract_features(gold)
+        print(gold_features)
+        # Vorhersagen für Gold-Daten erhalten
+        # preds = self.predict(gold, features)
+        # print(preds)
+        # Accuracy berechnen
+        # ...
 
 if __name__ == '__main__':
     pd.set_option('display.max_columns', None)
