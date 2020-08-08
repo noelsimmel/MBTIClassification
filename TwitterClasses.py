@@ -30,7 +30,10 @@ class Tweet:
             return 0
 
     def __contains__(self, query):
-        return query in self.text
+        try: 
+            return query in self.text
+        except TypeError:
+            return False
 
     def _instantiate(self, status):
         '''
