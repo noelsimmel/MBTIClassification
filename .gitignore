@@ -10,6 +10,9 @@ __pycache__/
 .Python
 build/
 data/
+*.csv
+*.tsv
+*.xls*
 develop-eggs/
 dist/
 downloads/
