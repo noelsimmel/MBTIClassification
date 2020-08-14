@@ -154,24 +154,21 @@ class MBTIClassifier:
         rts_rate = sum(t.rt_count for t in row.tweets) / tweet_number
         # ll = likelihood = Wie viel % der Tweets dieses Attribut hatten
         # Da diese Attribute binär sind
-        # d.h. rts_rate ist die durchschnittliche Anzahl an RTs, die ein Tweet
-        # dieser/s Users bekommt, retweeting_rate ist die Likelihood, dass ein
-        # Tweet auf dem Profil ein RT von einer/m anderen User ist
+        # d.h. rts_rate ist die durchschnittliche Anzahl an RTs, 
+        # die ein Tweet dieser/s Users bekommt
         media_ll = sum(t.has_media for t in row.tweets) / tweet_number
         url_ll = sum(t.has_url for t in row.tweets) / tweet_number
-        replying_rate = sum(t.is_reply for t in row.tweets) / tweet_number
-        # Wird bei TwiSty-Daten immer 0.0 sein, weil sie keine RTs enthalten
-        retweeting_rate = 0.0 #sum(t.is_retweet for t in row.tweets) / tweet_number
+        reply_ll = sum(t.is_reply for t in row.tweets) / tweet_number
 
         # Alles als namedtuple speichern und zurückgeben
         field_names = ['description', 'followers_friends_ratio', 'is_verified', 
                        'has_profile_url', 'hashtags', 'mentions', 'favs', 'rts', 
-                       'media_l', 'url_l', 'reply_l', 'rt_l']
+                       'media_ll', 'url_ll', 'reply_ll']
         TwitterStatistics = namedtuple('TwitterStatistics', field_names)
         stats = TwitterStatistics(user.description, user.followers_friends_ratio,
                                   user.is_verified, user.has_profile_url, 
                                   hashtags_rate, mentions_rate, favs_rate, rts_rate, 
-                                  media_ll, url_ll, replying_rate, retweeting_rate)
+                                  media_ll, url_ll, reply_ll)
         return stats
     
     def _get_linguistic_features(self, row):
@@ -230,7 +227,7 @@ class MBTIClassifier:
             logger.warning(f"{(old_len-len(features))} nicht verfügbare User gelöscht \
                             (jetzt noch {len(features)} Zeilen)")
 
-        # Metadaten aus Userprofil und Tweets ziehen, 12 neue Spalten erstellen
+        # Metadaten aus Userprofil und Tweets ziehen, 11 neue Spalten erstellen
         twitter_stats = features.apply(self._get_twitter_statistics, axis=1)
         twitter_stats_df = pd.DataFrame(list(twitter_stats), columns=twitter_stats[0]._fields)
         features = pd.concat([features, twitter_stats_df], axis=1)
