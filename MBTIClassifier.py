@@ -57,10 +57,10 @@ class MBTIClassifier:
 
         if train:
             self.train_data, self.val_data, self.test_data = self.split_dataset(input_filename)
-            model = self.train(self.train_data, features_filename)
-            # model = pd.read_csv("features_smalldataset.tsv", sep='\t', index_col=0) # Achtung: Data leak
-            # print(model)
-            self.evaluate(self.test_data, model)
+            self.model = self.train(self.train_data, features_filename)
+            # self.model = pd.read_csv("features_smalldataset.tsv", sep='\t', index_col=0) # Achtung: Data leak
+            # print(self.model)
+            self.evaluate(self.test_data)
 
     def _preprocess(self, fn):
         '''
@@ -290,7 +290,7 @@ class MBTIClassifier:
         logger.info(f"Ende Training ({len(df)} Zeilen, {len(agg_features.columns)} Spalten)")
         return agg_features
 
-    def predict(self, data, model):
+    def predict(self, data):
         '''
         '''
 
@@ -303,10 +303,10 @@ class MBTIClassifier:
         # Für Testfall: MBTI-Spalte entfernen
         if 'mbti' in data: data = data.drop(columns=['mbti'])
         # data soll so viele Spalten haben wie model ohne MBTI
-        assert data.shape[1] == model.shape[1]-1
+        assert data.shape[1] == self.model.shape[1]-1
 
         # Verschachtelte Liste mit allen Features pro Klasse erstellen
-        gold = model.values.tolist()
+        gold = self.model.values.tolist()
         # Über alle Gold-Klassen iterieren
         for g in gold:
             logger.debug(f"Differenzen zu Klasse {g} berechnen")
@@ -330,12 +330,12 @@ class MBTIClassifier:
 
         pass
 
-    def evaluate(self, gold, model):
+    def evaluate(self, gold):
         '''
         Testet den Klassifikator auf den Testdaten.
         '''
 
-        logger.info(f"Beginn Evaluierung ({len(gold)} Test-Instanzen, {len(model)} Klassen)")
+        logger.info(f"Beginn Evaluierung ({len(gold)} Test-Instanzen, {len(self.model)} Klassen)")
         # Testdaten in Feature-Repräsentation umwandeln
         gold_features = self.extract_features(gold)
         # Alles droppen außer die MBTI- und Features-Spalten
@@ -343,8 +343,8 @@ class MBTIClassifier:
                                                          'tweets', 'description'])
         # Vorhersagen für Gold-Daten erhalten
         logger.info(f"Vorhersage erhalten: \
-            Eingabe-Dimension {gold_features_only.shape}, Modell-Dimension {model.shape}")
-        preds = self.predict(gold_features_only, model)
+            Eingabe-Dimension {gold_features_only.shape}, Modell-Dimension {self.model.shape}")
+        preds = self.predict(gold_features_only)
         preds['gold'] = gold_features_only.mbti
         # TODO: Dateiname aus Shell übernehmen
         preds.to_csv('predictions.tsv', sep='\t')
