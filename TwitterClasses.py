@@ -26,7 +26,7 @@ class Tweet:
         self.text = None
         self.hashtags_count = self.mentions_count = 0
         self.fav_count = self.rt_count = 0
-        self.has_media = self.has_url = self.is_reply = self.is_retweet = False
+        self.has_media = self.has_url = self.is_reply = False
         
         try:
             self._instantiate(status)
@@ -69,15 +69,6 @@ class Tweet:
         # Zugang zur Twitter-API leider nicht abgefragt werden
         if status.in_reply_to_status_id:
             self.is_reply = True
-        # Speziell für Retweets. TwiSty enthält allerdings keine Retweets
-        if 'retweeted_status' in status._json:
-            self.is_retweet = True
-            # Text wird durch Voranstellen des Usernamen evtl. abgeschnitten
-            # Deshalb auf Attribut full_text zurückgreifen
-            self.text = status._json['retweeted_status']['full_text']
-            # Likes und RTs eines Retweets ignorieren
-            self.fav_count = 0
-            self.rt_count = 0
 
 
 class User:
