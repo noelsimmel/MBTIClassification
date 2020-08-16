@@ -226,6 +226,8 @@ class MBTIClassifier:
         if len(features) < old_len:
             logger.warning(f"{(old_len-len(features))} nicht verfügbare User gelöscht \
                             (jetzt noch {len(features)} Zeilen)")
+        if len(features) == 0:
+            raise ValueError("Keine validen User vorhanden")
 
         # Metadaten aus Userprofil und Tweets ziehen, 11 neue Spalten erstellen
         twitter_stats = features.apply(self._get_twitter_statistics, axis=1)
