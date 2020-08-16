@@ -362,5 +362,6 @@ if __name__ == '__main__':
     # pd.set_option('display.max_colwidth', None)
     f = 'C:/Users/Natze/Documents/Uni/Computerlinguistik/6.Semester/MBTIClassification/data/TwiSty-DE.json'
     # Leerzeilen in logfile einfügen
+    # test
     logger.info('\n\n')
     clf = MBTIClassifier(f, 'test.tsv', train=True)
