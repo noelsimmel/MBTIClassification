@@ -215,10 +215,10 @@ class MBTIClassifier:
         url_ll = sum(t.has_url for t in tweets)
         reply_ll = sum(t.is_reply for t in tweets)
 
-        features = [user_id, hashtags_rate, mentions_rate, 
-                    favs_rate, rts_rate, media_ll, url_ll, reply_ll]
+        features = [hashtags_rate, mentions_rate, favs_rate, 
+                    rts_rate, media_ll, url_ll, reply_ll]
         tweet_number = len(tweets)
-        features_normalized = [f/tweet_number for f in features]
+        features_normalized = [user_id] + [f/tweet_number for f in features]
 
         # Alles als namedtuple speichern und zurückgeben
         field_names = ['user_id', 'hashtags', 'mentions', 'favs', 'rts', 
@@ -248,7 +248,7 @@ class MBTIClassifier:
 
         features = [length, tokens, questions, exclamations]
         tweet_number = len(tweets)
-        features_normalized = [f/tweet_number for f in features]
+        features_normalized = [user_id] + [f/tweet_number for f in features]
 
         # Alles als namedtuple speichern und zurückgeben
         # field_names = ['chars', 'letters', 'capitals', 'numbers', 'special_chars', 
@@ -330,6 +330,7 @@ class MBTIClassifier:
             # pd.agg erstellt einen neuen DF mit den Durchschnittswerten aller Spalten
             mbti_aggregated = mbti.agg(['mean'])
             # Am Anfang des DF eine Spalte mit dem MBTI-Typ einfügen
+            if 'mbti' in mbti_aggregated: mbti_aggregated.drop(columns=['mbti'], inplace=True)
             mbti_aggregated.insert(loc=0, column='mbti', value=t)
             # An agg_features anhängen
             agg_features = agg_features.append(mbti_aggregated, ignore_index=True)
