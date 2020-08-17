@@ -202,27 +202,29 @@ class MBTIClassifier:
         user_id, tweets = user_tweets
         logger.debug(f"Twitter-Features für {user_id} extrahieren")
         # Tweet-Statistiken (aus den heruntergeladenen Tweets extrahieren)
-        tweet_number = len(tweets)
         # rate = Absolute Häufigkeit des Attributes / Anzahl an Tweets für diese*n User
-        hashtags_rate = sum(t.hashtags_count for t in tweets) / tweet_number
-        mentions_rate = sum(t.mentions_count for t in tweets) / tweet_number
-        favs_rate = sum(t.fav_count for t in tweets) / tweet_number
-        rts_rate = sum(t.rt_count for t in tweets) / tweet_number
+        hashtags_rate = sum(t.hashtags_count for t in tweets)
+        mentions_rate = sum(t.mentions_count for t in tweets)
+        favs_rate = sum(t.fav_count for t in tweets)
+        rts_rate = sum(t.rt_count for t in tweets)
         # ll = likelihood = Wie viel % der Tweets dieses Attribut hatten
         # Da diese Attribute binär sind
         # d.h. rts_rate ist die durchschnittliche Anzahl an RTs, 
         # die ein Tweet dieser/s Users bekommt
-        media_ll = sum(t.has_media for t in tweets) / tweet_number
-        url_ll = sum(t.has_url for t in tweets) / tweet_number
-        reply_ll = sum(t.is_reply for t in tweets) / tweet_number
+        media_ll = sum(t.has_media for t in tweets)
+        url_ll = sum(t.has_url for t in tweets)
+        reply_ll = sum(t.is_reply for t in tweets)
+
+        features = [user_id, hashtags_rate, mentions_rate, 
+                    favs_rate, rts_rate, media_ll, url_ll, reply_ll]
+        tweet_number = len(tweets)
+        features_normalized = [f/tweet_number for f in features]
 
         # Alles als namedtuple speichern und zurückgeben
         field_names = ['user_id', 'hashtags', 'mentions', 'favs', 'rts', 
                        'media_ll', 'url_ll', 'reply_ll']
         TwitterFeatures = namedtuple('TwitterFeatures', field_names)
-        features = TwitterFeatures(user_id, hashtags_rate, mentions_rate, 
-                                   favs_rate, rts_rate, media_ll, url_ll, reply_ll)
-        return features
+        return TwitterFeatures(*features_normalized)
     
     def _get_linguistic_features(self, user_tweets):
         '''
@@ -231,7 +233,7 @@ class MBTIClassifier:
 
         user_id, tweets = user_tweets
         logger.debug(f"Linguistische Features für {user_id} extrahieren")
-        tweet_number = len(tweets)
+        tweets = tweets[:3] # Test
         # for t in tweets:
             # sents = self.__sentence_split(t)
             # tokens = self.__tokenize(t)
@@ -239,10 +241,14 @@ class MBTIClassifier:
             # lemma = self.__lemmatize(t)
             # named_entities = self.__named_entity_recognition(t)
 
-        length = sum(len(t.text) for t in tweets) / tweet_number
-        tokens = sum(len(t.text.split()) for t in tweets) / tweet_number
-        questions = sum(t.text.count('?')/len(t.text) for t in tweets) / tweet_number
-        exclamations = sum(t.text.count('!')/len(t.text) for t in tweets) / tweet_number
+        length = sum(len(t.text) for t in tweets)
+        tokens = sum(len(t.text.split()) for t in tweets)
+        questions = sum(t.text.count('?')/len(t.text) for t in tweets)
+        exclamations = sum(t.text.count('!')/len(t.text) for t in tweets)
+
+        features = [length, tokens, questions, exclamations]
+        tweet_number = len(tweets)
+        features_normalized = [f/tweet_number for f in features]
 
         # Alles als namedtuple speichern und zurückgeben
         # field_names = ['chars', 'letters', 'capitals', 'numbers', 'special_chars', 
@@ -252,8 +258,7 @@ class MBTIClassifier:
         #                'sentiment', 'named_entities']
         field_names = ['user_id', 'length', 'tokens', 'questions', 'exclamations']
         LingFeatures = namedtuple('LingFeatures', field_names)
-        features = LingFeatures(user_id, length, tokens, questions, exclamations)
-        return features
+        return LingFeatures(*features_normalized)
     
     def _extract_features(self, df):
         '''
@@ -340,6 +345,7 @@ class MBTIClassifier:
         '''
 
         logger.info(f"Beginn Training ({input_df.shape[0]} Zeilen)")
+        input_df = input_df[:2] # Test
         # Features extrahieren und an den DF anhängen
         features_only = self._extract_features(input_df)
         features = pd.merge(input_df, features_only, on=['user_id'])
