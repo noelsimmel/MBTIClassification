@@ -57,8 +57,12 @@ class MBTIClassifier:
         self.api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
         logger.info("Verbindung zur Twitter-API hergestellt")
 
+        self.model = None
+
         if train:
-            self.train_data, self.val_data, self.test_data = self.split_dataset(input_filename)
+            # self.train_data, self.val_data, self.test_data = self.split_dataset(input_filename)
+            self.train_data = pd.read_json('dataset_training.json').transpose()
+            self.val_data = pd.read_json('dataset_validation.json').transpose()
             self.model = self.train(self.train_data, features_filename)
             # self.model = pd.read_csv("features.tsv", sep='\t', index_col=0) # Achtung: Data leak
             # self.evaluate(self.test_data)
@@ -105,6 +109,13 @@ class MBTIClassifier:
         train, val = train_test_split(temp, test_size=0.24, stratify=temp['mbti'])
         logger.info(f"Datensatz in Train/Val/Test gesplittet, Verhältnis \
              {(len(train)/len(data)):.2f}/{(len(val)/len(data)):.2f}/{(len(test)/len(data)):.2f}")
+
+        train.to_json('dataset_training.json', orient='index')
+        val.to_json('dataset_validation.json', orient='index')
+        test.to_json('dataset_test.json', orient='index')
+        logger.info("Datensätze als json-Dateien abgespeichert")
+        print("Neue Dateien erstellt: \
+                dataset_training.json, dataset_validation.json, dataset_test.json")
 
         # TODO: Trainingsdaten oversamplen, da sonst 50% der Klassen <10 mal vertreten sind
         return train, val, test
@@ -339,6 +350,8 @@ class MBTIClassifier:
         # Aggregierte Features in tsv-Datei schreiben
         agg_features.to_csv(output_filename, sep='\t')
         logger.info(f"Aggregierte Features in {output_filename} geschrieben")
+        print(f"Neue Datei erstellt: {output_filename}")
+        self.model = agg_features
         return agg_features
 
     def predict(self, df):
@@ -393,10 +406,14 @@ class MBTIClassifier:
         preds = self.predict(gold)
         # TODO: Dateiname aus Shell übernehmen
         preds.to_csv('predictions.tsv', sep='\t')
+        logger.info("Vorhersage in predictions.tsv geschrieben")
+        print("Neue Datei erstellt: predictions.tsv")
 
         # Accuracy berechnen
         accuracy = sum(preds.prediction == preds.gold)/len(preds)
         logger.info(f"Ende Evaluierung (Accuracy: {accuracy}, Fehler-Schnitt: {preds.error.mean()})")
+        print(f"Accuracy: {accuracy}")
+        return accuracy
 
 
 if __name__ == '__main__':
