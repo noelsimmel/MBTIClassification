@@ -15,7 +15,9 @@ from collections import namedtuple
 import concurrent.futures
 import logging
 import os
-import threading
+import spacy
+from spacymoji import Emoji
+from spacy_langdetect import LanguageDetector
 # Externe Module
 import dotenv
 import pandas as pd
@@ -57,6 +59,11 @@ class MBTIClassifier:
         self.api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
         logger.info("Verbindung zur Twitter-API hergestellt")
 
+        self.nlp = spacy.load('de_core_news_sm')
+        self.emoji = Emoji(self.nlp)
+        self.nlp.add_pipe(self.emoji, first=True)
+        self.nlp.add_pipe(LanguageDetector(), name="language_detector", last=True)
+
         self.model = None
 
         if train:
@@ -65,7 +72,7 @@ class MBTIClassifier:
             self.val_data = pd.read_json('dataset_validation.json').transpose()
             self.model = self.train(self.train_data, features_filename)
             # self.model = pd.read_csv("features.tsv", sep='\t', index_col=0) # Achtung: Data leak
-            # self.evaluate(self.test_data)
+            self.evaluate(self.val_data)
 
     def _preprocess(self, fn):
         '''
@@ -226,37 +233,72 @@ class MBTIClassifier:
         TwitterFeatures = namedtuple('TwitterFeatures', field_names)
         return TwitterFeatures(*features_normalized)
     
+    def __get_spacy_features(self, texts):
+        '''
+        spaCy ignoriert automatisch Mentions, Hashtags und Links.
+        '''
+
+        logger.debug(f"Extrahiere spaCy-Features für {len(texts)} Tweets")
+        tokens_count = emoji = emoticons = nents = 0 
+        tweet_length = word_length = sent_length = 0
+        question_marks = exclamation_marks = numbers = adjectives = 0
+        vocab = set()
+        # nlp.pipe gibt einen Generator für doc-Objekte zurück
+        # laut Docs effizienter als for t in tweets: doc = selp.nlp(t)
+        for doc in self.nlp.pipe(texts, n_process=4):
+            print(doc)
+            ld = len(doc)
+            tokens_count += ld
+            tweet_length += len(doc.text)
+            sent_length += sum(len(s) for s in doc.sents)/len(list(doc.sents))
+            emoji += len(doc._.emoji)
+            nents += len(doc.ents) # named entities
+            # @Hannah: Könnte man die Schleife vereinfachen?
+            for token in doc:
+                if token.is_punct:
+                    if token.text == '?': question_marks += 1
+                    if token.text == '!': exclamation_marks += 1
+                    # Annäherung an Emoticons
+                    if len(token) > 1 and ':' in token.text: emoticons += 1
+                elif token.like_num: numbers += 1
+                elif token.is_alpha:
+                    word_length += len(token)
+                    vocab.add(token.lemma_)
+                    if token.pos_ == 'ADJ': adjectives += 1
+
+                # Features hier NICHT normalisieren, da die Zahlen sonst sehr klein werden
+                # Denke es ist vernachlässigbar, weil Tweets ja ungefähr gleich lang sind
+
+                # Über Anzahl Token im Tweet normalisieren
+                # to_normalize = [nents, question_marks, exclamation_marks, numbers, 
+                #                 adjectives, emoji, emoticons]
+                # nents, question_marks, exclamation_marks, numbers, adjectives, emoji, \
+                #     emoticons = [f/ld for f in to_normalize]
+        return [tokens_count, word_length, sent_length, len(vocab), 
+                tweet_length, nents, question_marks, exclamation_marks,  
+                numbers, adjectives, emoji, emoticons]
+    
     def _get_linguistic_features(self, user_tweets):
         '''
-        ((Zuerst als Test ein paar einfache Features extrahieren))
         '''
 
         user_id, tweets = user_tweets
         logger.debug(f"Linguistische Features für {user_id} extrahieren")
-        tweets = tweets[:3] # Test
-        # for t in tweets:
-            # sents = self.__sentence_split(t)
-            # tokens = self.__tokenize(t)
-            # pos = self.__pos_tag(t)
-            # lemma = self.__lemmatize(t)
-            # named_entities = self.__named_entity_recognition(t)
+        tweets = tweets[:5] # Test
+        # ttttthrreeeeeeaaaaddd saafeeee .......
 
-        length = sum(len(t.text) for t in tweets)
-        tokens = sum(len(t.text.split()) for t in tweets)
-        questions = sum(t.text.count('?')/len(t.text) for t in tweets)
-        exclamations = sum(t.text.count('!')/len(t.text) for t in tweets)
-
-        features = [length, tokens, questions, exclamations]
+        # Features mit spaCy extrahieren
+        texts = [t.text for t in tweets]
+        spacy_features = self.__get_spacy_features(texts)
+        # Über Anzahl Tweets für diese*n User*in normalisieren
         tweet_number = len(tweets)
-        features_normalized = [user_id] + [f/tweet_number for f in features]
+        features_normalized = [user_id] + [f/tweet_number for f in spacy_features]
 
         # Alles als namedtuple speichern und zurückgeben
-        # field_names = ['chars', 'letters', 'capitals', 'numbers', 'special_chars', 
-        #                'punctuation', 'questions', 'exclamations', 'words', 'word_length',
-        #                'long_words', 'emoticons', 'emoji', 'typos', 'type_token_ratio',
-        #                'hapax_legomena', 'sentences', 'sentence_length', 'pos', 
-        #                'sentiment', 'named_entities']
-        field_names = ['user_id', 'length', 'tokens', 'questions', 'exclamations']
+        field_names = ['user_id', 'tokens_count', 'word_length', 'sent_length', 
+                       'vocab_size', 'tweet_length', 'named_entities',
+                       'question_marks', 'exclamation_marks', 'numbers', 
+                       'adjectives', 'emoji', 'emoticons']
         LingFeatures = namedtuple('LingFeatures', field_names)
         return LingFeatures(*features_normalized)
     
@@ -267,14 +309,18 @@ class MBTIClassifier:
         logger.info(f"Beginn Feature-Extraktion: {len(df)} Instanzen")
         # Listen von validen User-IDs und zugehören Tweets bekommen
         # d.h. die User, für die Tweets heruntergeladen werden konnten
+        logger.info("Beginn Tweet-Download")
         users, tweets = self._get_valid_twitter_data(df)
         # Zippen, damit User-IDs und Features gematcht werden können (thread-safe-ish)
         user_tweets_zipped = list(zip(users, tweets))
         # Features extrahieren: Account-basiert, Twitter-Metadaten-basiert, textbasiert
+        logger.info("Beginn Extraktion User-Features")
         user_features = self._thread_function(self._get_user_features, users, workers=10)
         # Hier müsste zwar nicht gethreaded werden, da keine I/O-Operation,
         # aber _thread_function() ist ein schöner Wrapper, um Schleifen zu vermeiden
+        logger.info("Beginn Extraktion Tweet-Features")
         twitter_features = self._thread_function(self._get_twitter_features, user_tweets_zipped)
+        logger.info("Beginn Extraktion linguistische Features")
         ling_features = self._thread_function(self._get_linguistic_features, user_tweets_zipped)
 
         # Alles in DataFrame packen
@@ -410,6 +456,7 @@ class MBTIClassifier:
 
         logger.info(f"Beginn Evaluierung ({len(gold)} Test-Instanzen, {len(self.model)} Klassen)")
         # Vorhersagen für Gold-Daten erhalten
+        gold = gold[:2]
         preds = self.predict(gold)
         # TODO: Dateiname aus Shell übernehmen
         preds.to_csv('predictions.tsv', sep='\t')
