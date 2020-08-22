@@ -16,8 +16,8 @@ import concurrent.futures
 import logging
 import os
 import spacy
-from spacymoji import Emoji
-from spacy_langdetect import LanguageDetector
+# from spacymoji import Emoji
+# from spacy_langdetect import LanguageDetector
 # Externe Module
 import dotenv
 import pandas as pd
@@ -28,7 +28,7 @@ from TwitterClasses import Tweet, User
 
 # Logging-Details
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(funcName)s:%(message)s')
 file_handler = logging.FileHandler('classifier.log')
 file_handler.setFormatter(formatter)
@@ -60,9 +60,6 @@ class MBTIClassifier:
         logger.info("Verbindung zur Twitter-API hergestellt")
 
         self.nlp = spacy.load('de_core_news_sm')
-        self.emoji = Emoji(self.nlp)
-        self.nlp.add_pipe(self.emoji, first=True)
-        self.nlp.add_pipe(LanguageDetector(), name="language_detector", last=True)
 
         self.model = None
 
@@ -206,32 +203,32 @@ class MBTIClassifier:
         '''
         '''
 
-        user_id, tweets = user_tweets
-        logger.debug(f"Twitter-Features für {user_id} extrahieren")
-        # Tweet-Statistiken (aus den heruntergeladenen Tweets extrahieren)
-        # rate = Absolute Häufigkeit des Attributes / Anzahl an Tweets für diese*n User
-        hashtags_rate = sum(t.hashtags_count for t in tweets)
-        mentions_rate = sum(t.mentions_count for t in tweets)
-        favs_rate = sum(t.fav_count for t in tweets)
-        rts_rate = sum(t.rt_count for t in tweets)
-        # ll = likelihood = Wie viel % der Tweets dieses Attribut hatten
-        # Da diese Attribute binär sind
-        # d.h. rts_rate ist die durchschnittliche Anzahl an RTs, 
-        # die ein Tweet dieser/s Users bekommt
-        media_ll = sum(t.has_media for t in tweets)
-        url_ll = sum(t.has_url for t in tweets)
-        reply_ll = sum(t.is_reply for t in tweets)
-
-        features = [hashtags_rate, mentions_rate, favs_rate, 
-                    rts_rate, media_ll, url_ll, reply_ll]
-        tweet_number = len(tweets)
-        features_normalized = [user_id] + [f/tweet_number for f in features]
-
-        # Alles als namedtuple speichern und zurückgeben
         field_names = ['user_id', 'hashtags', 'mentions', 'favs', 'rts', 
                        'media_ll', 'url_ll', 'reply_ll']
         TwitterFeatures = namedtuple('TwitterFeatures', field_names)
-        return TwitterFeatures(*features_normalized)
+        for user_id, tweets in user_tweets:
+            # logger.debug(f"Twitter-Features für {user_id} extrahieren")
+            # Tweet-Statistiken (aus den heruntergeladenen Tweets extrahieren)
+            # rate = Absolute Häufigkeit des Attributes / Anzahl an Tweets für diese*n User
+            hashtags_rate = sum(t.hashtags_count for t in tweets)
+            mentions_rate = sum(t.mentions_count for t in tweets)
+            favs_rate = sum(t.fav_count for t in tweets)
+            rts_rate = sum(t.rt_count for t in tweets)
+            # ll = likelihood = Wie viel % der Tweets dieses Attribut hatten
+            # Da diese Attribute binär sind
+            # d.h. rts_rate ist die durchschnittliche Anzahl an RTs, 
+            # die ein Tweet dieser/s Users bekommt
+            media_ll = sum(t.has_media for t in tweets)
+            url_ll = sum(t.has_url for t in tweets)
+            reply_ll = sum(t.is_reply for t in tweets)
+
+            features = [hashtags_rate, mentions_rate, favs_rate, 
+                        rts_rate, media_ll, url_ll, reply_ll]
+            tweet_number = len(tweets)
+            features_normalized = [user_id] + [f/tweet_number for f in features]
+
+            # Alles als namedtuple speichern und zurückgeben
+            yield TwitterFeatures(*features_normalized)
     
     def __get_spacy_features(self, texts):
         '''
@@ -239,32 +236,31 @@ class MBTIClassifier:
         '''
 
         logger.debug(f"Extrahiere spaCy-Features für {len(texts)} Tweets")
-        tokens_count = emoji = emoticons = nents = 0 
+        tokens_count = special_chars = emoticons = nents = 0 
         tweet_length = word_length = sent_length = 0
         question_marks = exclamation_marks = numbers = adjectives = 0
         vocab = set()
         # nlp.pipe gibt einen Generator für doc-Objekte zurück
         # laut Docs effizienter als for t in tweets: doc = selp.nlp(t)
-        for doc in self.nlp.pipe(texts, n_process=4):
-            print(doc)
+        for doc in self.nlp.pipe(texts, n_process=8):
             ld = len(doc)
             tokens_count += ld
             tweet_length += len(doc.text)
             sent_length += sum(len(s) for s in doc.sents)/len(list(doc.sents))
-            emoji += len(doc._.emoji)
             nents += len(doc.ents) # named entities
             # @Hannah: Könnte man die Schleife vereinfachen?
             for token in doc:
-                if token.is_punct:
+                if token.is_alpha:
+                    word_length += len(token)
+                    vocab.add(token.lemma_)
+                    if token.pos_ == 'ADJ': adjectives += 1
+                elif token.is_punct:
                     if token.text == '?': question_marks += 1
                     if token.text == '!': exclamation_marks += 1
                     # Annäherung an Emoticons
                     if len(token) > 1 and ':' in token.text: emoticons += 1
                 elif token.like_num: numbers += 1
-                elif token.is_alpha:
-                    word_length += len(token)
-                    vocab.add(token.lemma_)
-                    if token.pos_ == 'ADJ': adjectives += 1
+                elif not token.is_ascii: special_chars += 1
 
                 # Features hier NICHT normalisieren, da die Zahlen sonst sehr klein werden
                 # Denke es ist vernachlässigbar, weil Tweets ja ungefähr gleich lang sind
@@ -276,31 +272,31 @@ class MBTIClassifier:
                 #     emoticons = [f/ld for f in to_normalize]
         return [tokens_count, word_length, sent_length, len(vocab), 
                 tweet_length, nents, question_marks, exclamation_marks,  
-                numbers, adjectives, emoji, emoticons]
+                numbers, adjectives, emoticons, special_chars]
     
     def _get_linguistic_features(self, user_tweets):
         '''
         '''
 
-        user_id, tweets = user_tweets
-        logger.debug(f"Linguistische Features für {user_id} extrahieren")
-        tweets = tweets[:5] # Test
-        # ttttthrreeeeeeaaaaddd saafeeee .......
-
-        # Features mit spaCy extrahieren
-        texts = [t.text for t in tweets]
-        spacy_features = self.__get_spacy_features(texts)
-        # Über Anzahl Tweets für diese*n User*in normalisieren
-        tweet_number = len(tweets)
-        features_normalized = [user_id] + [f/tweet_number for f in spacy_features]
-
-        # Alles als namedtuple speichern und zurückgeben
         field_names = ['user_id', 'tokens_count', 'word_length', 'sent_length', 
                        'vocab_size', 'tweet_length', 'named_entities',
                        'question_marks', 'exclamation_marks', 'numbers', 
-                       'adjectives', 'emoji', 'emoticons']
+                       'adjectives', 'emoticons', 'special_characters']
         LingFeatures = namedtuple('LingFeatures', field_names)
-        return LingFeatures(*features_normalized)
+        for user_id, tweets in user_tweets:
+            logger.debug(f"Linguistische Features für {user_id} extrahieren")
+            # tweets = tweets[:5] # Test
+            # ttttthrreeeeeeaaaaddd saafeeee .......
+
+            # Features mit spaCy extrahieren
+            texts = [t.text for t in tweets]
+            spacy_features = self.__get_spacy_features(texts)
+            # Über Anzahl Tweets für diese*n User*in normalisieren
+            tweet_number = len(tweets)
+            features_normalized = [user_id] + [f/tweet_number for f in spacy_features]
+
+            # Alles als namedtuple speichern und zurückgeben
+            yield LingFeatures(*features_normalized)
     
     def _extract_features(self, df):
         '''
@@ -316,12 +312,13 @@ class MBTIClassifier:
         # Features extrahieren: Account-basiert, Twitter-Metadaten-basiert, textbasiert
         logger.info("Beginn Extraktion User-Features")
         user_features = self._thread_function(self._get_user_features, users, workers=10)
-        # Hier müsste zwar nicht gethreaded werden, da keine I/O-Operation,
-        # aber _thread_function() ist ein schöner Wrapper, um Schleifen zu vermeiden
+        # print(user_features)
         logger.info("Beginn Extraktion Tweet-Features")
-        twitter_features = self._thread_function(self._get_twitter_features, user_tweets_zipped)
+        twitter_features = list(self._get_twitter_features(user_tweets_zipped))
+        # print(twitter_features)
         logger.info("Beginn Extraktion linguistische Features")
-        ling_features = self._thread_function(self._get_linguistic_features, user_tweets_zipped)
+        ling_features = list(self._get_linguistic_features(user_tweets_zipped))
+        # print(ling_features)
 
         # Alles in DataFrame packen
         # @Hannah: Könnte man das vereinfachen..? 
@@ -392,7 +389,7 @@ class MBTIClassifier:
         '''
 
         logger.info(f"Beginn Training ({input_df.shape[0]} Zeilen)")
-        input_df = input_df[:2] # Test
+        # input_df = input_df[:2] # Test
         # Features extrahieren und an den DF anhängen
         features_only = self._extract_features(input_df)
         features = pd.merge(input_df, features_only, on=['user_id'])
@@ -456,7 +453,7 @@ class MBTIClassifier:
 
         logger.info(f"Beginn Evaluierung ({len(gold)} Test-Instanzen, {len(self.model)} Klassen)")
         # Vorhersagen für Gold-Daten erhalten
-        gold = gold[:2]
+        # gold = gold[:2]
         preds = self.predict(gold)
         # TODO: Dateiname aus Shell übernehmen
         preds.to_csv('predictions.tsv', sep='\t')
