@@ -80,10 +80,10 @@ class MBTIClassifier:
 
         **Parameter:**
         - fn (str): Dateiname//Pfad der Eingabedaten. Der Korpus muss eine 
-                    json-Datei mit Spalten mbti und user_id sein.
+                    json-Datei mit Spalte user_id (und bei Trainingsdaten: mbti) sein.
 
         **Rückgabe:**
-        DataFrame mit Spalten mbti und user_id.
+        DataFrame mit Spalte user_id und bei Trainingdaten mbti.
         '''
 
         # Dataframe mit n Zeilen, 6 Spalten
@@ -92,7 +92,7 @@ class MBTIClassifier:
         corpus.reset_index(inplace=True)
         # Relevante Spalten in neuen DF übernehmen
         df = pd.DataFrame()
-        df['mbti'] = corpus['mbti']
+        if 'mbti' in corpus: df['mbti'] = corpus['mbti']
         # User-ID von String zu Int casten
         df['user_id'] = corpus['user_id'].astype('int64')
         logger.info(f"Daten von {fn} eingelesen ({len(df)} Zeilen)")
@@ -539,9 +539,14 @@ class MBTIClassifier:
         preds = pd.DataFrame(differences.idxmin(axis=1), columns=['prediction'])
         assert len(preds) == len(data) == len(features_only)
         preds.insert(0, 'user_id', data.user_id)
-        if 'mbti' in data: preds['gold'] = data.mbti    # bei Validierung/Evaluation
+        if 'mbti' in data: preds['gold'] = data.mbti    # Bei Validierung/Evaluation
         preds['error'] = differences.min(axis=1)
         logger.info(f"Ende Vorhersage ({len(preds)} Instanzen)")
+
+        preds.to_csv('predictions.tsv', sep='\t')
+        logger.info("Vorhersage in predictions.tsv geschrieben")
+        print("Neue Datei erstellt: predictions.tsv")
+
         return preds.round(5)
 
     def evaluate(self, gold):
@@ -557,7 +562,7 @@ class MBTIClassifier:
         Accuracy zw. 0 und 1.
         '''
 
-        logger.info(f"Beginn Evaluierung ({len(gold)} Test-Instanzen, {len(self.model)} Klassen)")
+        logger.info(f"Beginn Evaluierung")
         # Vorhersagen für Gold-Daten erhalten
         # gold = gold[:2]
         preds = self.predict(gold)
