@@ -1,14 +1,8 @@
 # Modul: PRO2-A, SS 2020
 # Projekt: Author profiling – Twitter & MBTI personality types
-# Datei: MBTIClassifierTrain.py – Trainiert einen Klassifikator basierend auf einem Twitter-Korpus
+# Datei: MBTIClassifier.py 
 # Autor*in: Noel Simmel (791794)
 # Abgabe: 31.08.20
-
-# JSON: verschachteltes dict: außen: id
-# innen: other_tweet_ids (list), mbti, user_id, gender, confirmed_tweet_ids (list)
-# Deutsch: {'ISTJ': 12, 'INFP': 95, 'ENTP': 26, 'ENFJ': 18, 'INTJ': 38, 'ISTP': 14, 
-# 'ENTJ': 14, 'INFJ': 48, 'ENFP': 40, 'INTP': 60, 'ISFP': 16, 'ESTP': 5, 'ISFJ': 10, 
-# 'ESFJ': 8, 'ESTJ': 4, 'ESFP': 3}
 
 # Standardmodule
 from collections import namedtuple
@@ -16,7 +10,6 @@ import concurrent.futures
 import logging
 import os
 import spacy
-# from spacymoji import Emoji
 # from spacy_langdetect import LanguageDetector
 # Externe Module
 import dotenv
@@ -28,7 +21,7 @@ from TwitterClasses import Tweet, User
 
 # Logging-Details
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(funcName)s:%(message)s')
 file_handler = logging.FileHandler('classifier.log')
 file_handler.setFormatter(formatter)
@@ -36,19 +29,18 @@ logger.addHandler(file_handler)
 
 class MBTIClassifier:
     '''
-    Trainingsklasse für den Klassifikator. 
-    Aus den Trainingsdaten werden relevante Features extrahiert, aggregiert und 
-    für die Inferenz in eine separate Datei gespeichert.
+    Klassifikator für MBTI-Persönlichkeits anhand von Twitter-Daten.
     '''
 
     def __init__(self, input_filename, features_filename, train=False):
         '''
-        Konstruktor. \n
+        Konstruktor.
 
-        **Parameter**: \n
-        input_filename (str): Dateiname/Pfad der Eingabedaten im json-Format.
-        features_filename (str): Name der tsv-Datei, in welche die Features gespeichert werden 
-        sollen (Training) bzw. aus welcher sie gelesen werden sollen (Inferenz).
+        **Parameter:**
+        - input_filename (str): Dateiname/Pfad der Eingabedaten im json-Format.
+        - features_filename (str): Name der tsv-Datei, in welche die Features gespeichert werden 
+          sollen (Training) bzw. aus welcher sie gelesen werden sollen (Inferenz).
+        - train (bool): Schaltet Trainingsmodus an/aus, standardmäßig False.
         '''
 
         # Credentials aus .env-Datei laden. Mehr Info: https://bit.ly/3glK6fd 
@@ -59,44 +51,64 @@ class MBTIClassifier:
         self.api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
         logger.info("Verbindung zur Twitter-API hergestellt")
 
+        # Deutsches spaCy-Modell laden
         self.nlp = spacy.load('de_core_news_sm')
 
-        self.model = None
+        self.model = None   # @Hannah: Oder lieber als Argument in den Funktionen?
 
+        # @Hannah: Gern Ideen, wie man das besser/schöner machen kann
+        # Einkommentieren, wenn input_filename ein ungesplittetes Datenset ist
+        # self.train_data, self.val_data, self.test_data = self.split_dataset(input_filename)
+        val_data = pd.read_json('dataset_validation.json').transpose()
+        test_data = pd.read_json('dataset_test.json').transpose()
         if train:
-            # self.train_data, self.val_data, self.test_data = self.split_dataset(input_filename)
-            self.train_data = pd.read_json('dataset_training.json').transpose()
-            self.val_data = pd.read_json('dataset_validation.json').transpose()
-            self.model = self.train(self.train_data, features_filename)
-            # self.model = pd.read_csv("features.tsv", sep='\t', index_col=0) # Achtung: Data leak
-            self.evaluate(self.val_data)
+            # Trainingsmodus: Trainieren + Evaluieren
+            train_data = pd.read_json(input_filename).transpose()
+            self.model = self.train(train_data, features_filename)
+            self.evaluate(val_data)
+        else:
+            # Inferenzmodus: Modell einlesen + Vorhersagen erhalten
+            self.model = pd.read_csv(features_filename, sep='\t', index_col=0)
+            input_df = pd.read_csv(input_filename, sep='\t', index_col=0)
+            self.predict(input_df)
+            self.evaluate(test_data)
 
     def _preprocess(self, fn):
         '''
-        Hilfsfunktion für split_dataset. Verarbeitet das TwiSty-Korpus vor und 
-        speichert die Daten in einem Pandas Dataframe.
+        Verarbeitet den Eingabe-Korpus vor und speichert die relevanten Daten 
+        in einem Pandas Dataframe.
+
+        **Parameter:**
+        - fn (str): Dateiname//Pfad der Eingabedaten. Der Korpus muss eine 
+                    json-Datei mit Spalten mbti und user_id sein.
+
+        **Rückgabe:**
+        DataFrame mit Spalten mbti und user_id.
         '''
 
         # Dataframe mit n Zeilen, 6 Spalten
-        df = pd.read_json(fn).transpose()
+        corpus = pd.read_json(fn).transpose()
         # Fortlaufender Index statt User ID als Index
-        df.reset_index(inplace=True)
-        # Irrelevante Spalten löschen
-        df.drop(columns=['index', 'other_tweet_ids', 'confirmed_tweet_ids', 'gender'], inplace=True)
+        corpus.reset_index(inplace=True)
+        # Relevante Spalten in neuen DF übernehmen
+        df = pd.DataFrame()
+        df['mbti'] = corpus['mbti']
         # User-ID von String zu Int casten
-        # TODO: Oder User-ID immer als String?
-        df['user_id'] = df['user_id'].astype('int64')
-        df = df[int(len(df)/3):]    # TESTEN
+        df['user_id'] = corpus['user_id'].astype('int64')
         logger.info(f"Daten von {fn} eingelesen ({len(df)} Zeilen)")
         return df
 
     def split_dataset(self, fn):
         '''
-        Liest die Daten ein und teilt sie in Trainings-, Validierungs- und 
-        Testdaten auf. \n
+        Liest die Daten ein, teilt sie in Trainings-, Validierungs- und 
+        Testdaten auf und speichert sie als json-Dateien. Verhältnis 60:19:21 
+        abgestimmt auf das deutsche TwiSty-Korpus.
 
-        **Parameter:** \n
-        fn (str): Dateiname/Pfad der Eingabedaten.
+        **Parameter:**
+        - fn (str): Dateiname/Pfad der Eingabedaten (input_filename).
+
+        **Rückgabe:**
+        Training, Validierung, Test als Dataframes.
         '''
 
         # Daten einlesen und vorverarbeiten
@@ -104,13 +116,14 @@ class MBTIClassifier:
 
         # Zunächst in Trainings- und Testdaten aufsplitten
         # Stratifizieren, d.h. beim Splitten soll das Klassenverhältnis 
-        # erhalten bleiben (da die Klassen sehr ungleich verteilt sind).
+        # erhalten bleiben (da die Klassen sehr ungleich verteilt sind)
         # Das Verhältnis 70:10:20 ließ sich aufgrund des kleinen Datensatzes
-        # nicht einhalten, da sonst nicht alle Klassen überall enthalten wären.
-        # Bei 60:19:21 enthält jedes Datenset alle 16 Klassen.
+        # nicht einhalten, da sonst nicht alle Klassen überall enthalten wären
+        # Bei 60:19:21 enthält jedes Datenset alle 16 Klassen
         temp, test = train_test_split(data, test_size=0.21, stratify=data['mbti'])
         # Aus den Trainingsdaten die Validierungsdaten abzweigen
         train, val = train_test_split(temp, test_size=0.24, stratify=temp['mbti'])
+        assert len(train.columns) == len(test.columns) == len(test.columns) 
         logger.info(f"Datensatz in Train/Val/Test gesplittet, Verhältnis \
              {(len(train)/len(data)):.2f}/{(len(val)/len(data)):.2f}/{(len(test)/len(data)):.2f}")
 
@@ -126,6 +139,16 @@ class MBTIClassifier:
 
     def _thread_function(self, func, args, workers=5):
         '''
+        Threadet eine beliebige Funktion, d.h. implementiert Concurrency, um 
+        I/O-Funktionen (Twitter-Download) schneller zu machen.
+
+        **Parameter:**
+        - func (function): Name der Funktion, die gethreaded werden soll.
+        - args (iterable): Argumente der Funktion.
+        - workers (int): Maximale Anzahl an Threads, standardmäßig 5.
+
+        **Rückgabe:**
+        Liste der Funktionswerte.
         '''
 
         # TODO: THREAD SAFE DATENSTRUKTUR!
@@ -135,8 +158,18 @@ class MBTIClassifier:
     
     def __download_tweets(self, user_id):
         '''
+        Gibt eine Liste der 120 neuesten Tweets eines Accounts abzgl. Retweets zurück. 
+        
+        **Parameter:**
+        - user_id (int): User-ID des Accounts (auf http://tweeterid.com können 
+                         Nutzernamen in IDs umgewandelt werden).
+
+        **Rückgabe:**
+        Liste der geladenen Tweets als Tweet-Objekte (s. TwitterClasses.py). 
+        Bei privaten oder gelöschten Accounts eine leere Liste.
         '''
 
+        # TODO: Statt User-ID auch Nutzername annehmen
         try:
             # Wenn Account privat ist, leere Liste zurückgeben
             if self.api.get_user(user_id=user_id).protected:
@@ -162,13 +195,20 @@ class MBTIClassifier:
             logger.warning(f"User {user_id}: Tweepy-Error: {str(e)}")
             return []
 
-    def _get_valid_twitter_data(self, df):
+    def __get_valid_twitter_data(self, df):
         '''
+        HilfsExtrahiert alle validen Accounts und Tweets aus einem Dataframe.
+
+        **Parameter:**
+        - df (DataFrame): df mit einer Spalte user_id.
+
+        **Rückgabe:**
+        - valid_users: Liste aller "validen" User-IDs, das heißt öffentliche Profile.
+        - valid_tweets: Verschachtelte Liste von bis zu 120 Tweets pro Account.
         '''
 
         # Liste mit User-IDs aus DataFrame ziehen
         users = df.user_id.values
-        # user_ids = [23361113, 202324814] # ESTP, IFSJ -- zum Testen
         # Alle Tweets für alle Accounts runterladen (threaded) = verschachtelte Liste
         tweet_list = self._thread_function(self.__download_tweets, users, workers=10)
 
@@ -184,8 +224,16 @@ class MBTIClassifier:
             raise ValueError("Keine validen User vorhanden")
         return valid_users, valid_tweets
     
-    def _get_user_features(self, user_id):
+    def __get_user_features(self, user_id):
         '''
+        Extrahiert User-Features für einen Account.
+
+        **Parameter:**
+        - user_id (int): User-ID des Accounts.
+
+        **Rückgabe:**
+        Namedtuple UserFeatures: User-ID, Beschreibung, Follower-Freunde-Verhältnis,
+        verifiziert, hat Profil-URL.
         '''
 
         # User-Objekt der Twitter-API downloaden und in eigene User-Klasse überführen
@@ -195,12 +243,23 @@ class MBTIClassifier:
         field_names = ['user_id', 'description', 'followers_friends_ratio', 
                        'is_verified', 'has_profile_url']
         UserFeatures = namedtuple('UserFeatures', field_names)
+        # description wird zwar im Folgenden nicht verwertet, 
+        # könnte aber in Zukunft für die Klassifikation benutzt werden
         features = UserFeatures(user.id, user.description, user.followers_friends_ratio,
                                 user.is_verified, user.has_profile_url)
         return features
 
-    def _get_twitter_features(self, user_tweets):
+    def __get_twitter_features(self, user_tweets):
         '''
+        Extrahiert Tweet-Features für einen Account.
+
+        **Parameter:**
+        - user_tweets (tuple): Enthält User-ID und Liste von Tweet-Objekten.
+
+        **Rückgabe:**
+        Namedtuple TwitterFeatures: Hashtags-Rate, Mentions-Rate, Favoriten-Rate, 
+        Retweet-Rate, Likelihood für Medien im Tweet (Fotos), Likelihood für URLs 
+        im Tweet, Likelihood dass ein Tweet eine Antwort ist.
         '''
 
         field_names = ['user_id', 'hashtags', 'mentions', 'favs', 'rts', 
@@ -222,6 +281,8 @@ class MBTIClassifier:
             url_ll = sum(t.has_url for t in tweets)
             reply_ll = sum(t.is_reply for t in tweets)
 
+            media_ll = url_ll = reply_ll = 0
+
             features = [hashtags_rate, mentions_rate, favs_rate, 
                         rts_rate, media_ll, url_ll, reply_ll]
             tweet_number = len(tweets)
@@ -232,17 +293,23 @@ class MBTIClassifier:
     
     def __get_spacy_features(self, texts):
         '''
-        spaCy ignoriert automatisch Mentions, Hashtags und Links.
+        Extrahiert linguistische Features für eine Liste von Tweets mit spaCy. 
+
+        **Parameter:**
+        - texts (list): Liste von Tweets als Strings.
+
+        **Rückgabe:**
+        Liste mit Features: Anzahl Tokens, Anzahl Sonderzeichen, Anzahl Emoticons,
+        Anzahl named entities. (TODO)
         '''
 
-        logger.debug(f"Extrahiere spaCy-Features für {len(texts)} Tweets")
         tokens_count = special_chars = emoticons = nents = 0 
         tweet_length = word_length = sent_length = 0
         question_marks = exclamation_marks = numbers = adjectives = 0
         vocab = set()
         # nlp.pipe gibt einen Generator für doc-Objekte zurück
         # laut Docs effizienter als for t in tweets: doc = selp.nlp(t)
-        for doc in self.nlp.pipe(texts, n_process=8):
+        for doc in self.nlp.pipe(texts, n_process=1):
             ld = len(doc)
             tokens_count += ld
             tweet_length += len(doc.text)
@@ -270,12 +337,22 @@ class MBTIClassifier:
                 #                 adjectives, emoji, emoticons]
                 # nents, question_marks, exclamation_marks, numbers, adjectives, emoji, \
                 #     emoticons = [f/ld for f in to_normalize]
+        tweet_length = word_length = sent_length = 0
+        question_marks = exclamation_marks = numbers = adjectives = 0
         return [tokens_count, word_length, sent_length, len(vocab), 
                 tweet_length, nents, question_marks, exclamation_marks,  
                 numbers, adjectives, emoticons, special_chars]
     
-    def _get_linguistic_features(self, user_tweets):
+    def __get_linguistic_features(self, user_tweets):
         '''
+        Extrahiert linguistische Features aus Tweets eines Accounts. Alle Features 
+        werden über die Anzahl an Tweets normalisiert.
+
+        **Parameter:**
+        - user_tweets (tuple): Enthält User-ID und Liste von Tweet-Objekten.
+
+        **Rückgabe:**
+        Namedtuple LingFeatures: TODO
         '''
 
         field_names = ['user_id', 'tokens_count', 'word_length', 'sent_length', 
@@ -284,8 +361,7 @@ class MBTIClassifier:
                        'adjectives', 'emoticons', 'special_characters']
         LingFeatures = namedtuple('LingFeatures', field_names)
         for user_id, tweets in user_tweets:
-            logger.debug(f"Linguistische Features für {user_id} extrahieren")
-            # tweets = tweets[:5] # Test
+            logger.debug(f"Linguistische Features für {user_id} extrahieren ({len(tweets)} Tweets)")
             # ttttthrreeeeeeaaaaddd saafeeee .......
 
             # Features mit spaCy extrahieren
@@ -300,25 +376,30 @@ class MBTIClassifier:
     
     def _extract_features(self, df):
         '''
+        Training: Extrahiert Features aus den Trainingsdaten.
+
+        **Parameter:**
+        - df (DataFrame): Trainingsdaten. Muss eine Spalte user_id haben.
+
+        **Rückgabe:**
+        Um die Features erweiterter DataFrame. Kann kürzer als der Input-DF sein, 
+        wenn nicht alle User-Accounts gefunden werden konnten. 
         '''
         
         logger.info(f"Beginn Feature-Extraktion: {len(df)} Instanzen")
         # Listen von validen User-IDs und zugehören Tweets bekommen
         # d.h. die User, für die Tweets heruntergeladen werden konnten
         logger.info("Beginn Tweet-Download")
-        users, tweets = self._get_valid_twitter_data(df)
+        users, tweets = self.__get_valid_twitter_data(df)
         # Zippen, damit User-IDs und Features gematcht werden können (thread-safe-ish)
         user_tweets_zipped = list(zip(users, tweets))
         # Features extrahieren: Account-basiert, Twitter-Metadaten-basiert, textbasiert
         logger.info("Beginn Extraktion User-Features")
-        user_features = self._thread_function(self._get_user_features, users, workers=10)
-        # print(user_features)
+        user_features = self._thread_function(self.__get_user_features, users, workers=10)
         logger.info("Beginn Extraktion Tweet-Features")
-        twitter_features = list(self._get_twitter_features(user_tweets_zipped))
-        # print(twitter_features)
+        twitter_features = list(self.__get_twitter_features(user_tweets_zipped))
         logger.info("Beginn Extraktion linguistische Features")
-        ling_features = list(self._get_linguistic_features(user_tweets_zipped))
-        # print(ling_features)
+        ling_features = list(self.__get_linguistic_features(user_tweets_zipped))
 
         # Alles in DataFrame packen
         # @Hannah: Könnte man das vereinfachen..? 
@@ -333,7 +414,7 @@ class MBTIClassifier:
                 assert f[0].user_id == f[1].user_id == f[2].user_id
                 all_features.loc[len(all_features)] = f[0] + f[1] + f[2]
             except AssertionError:
-                # Wenn beim Threading etwas schief gegangen ist: loggen und ignorieren
+                # Wenn beim Threading etwas schief gegangen ist: Loggen und ignorieren
                 logger.debug(f"Assertion failed {f[0].user_id}/{f[1].user_id}/{f[2].user_id}")
                 continue
 
@@ -349,16 +430,18 @@ class MBTIClassifier:
     
     def _aggregate_features(self, df):
         '''
-        Aggregiert die Features in einem DataFrame für alle Klassen. Da alle Features 
-        numerisch sind, wird jeweils der Durchschnitt über alle Instanzen einer Klasse gebildet.
+        Aggregiert die Features für alle Klassen. Da alle Features numerisch sind, 
+        wird jeweils der ungewichtete Durchschnitt über alle Instanzen einer Klasse 
+        gebildet.
 
-        **Parameter:** \n
-        df (DataFrame): Enthält für jede Instanz (User) alle berechneten Features (Ergebnis von 
-        extract_features).
+        **Parameter:**
+        - df (DataFrame): Enthält für jede Instanz (User) alle berechneten Features 
+                          (Ergebnis von _extract_features).
 
-        **Returns:** \n
-        DataFrame mit |Klassen| Zeilen und |Features| Spalten. Hat weniger Spalten als Input-DF, 
-        da z.B. User-ID und Tweets gedroppt werden.
+        **Returns:**
+        DataFrame mit |Klassen| Zeilen und |Features| Spalten. Hat weniger Spalten 
+        als Input-DF, da z.B. User-ID und Beschreibung gedroppt werden. Werte auf 
+        5 Stellen hinterm Komma gerundet.
         '''
 
         logger.info("Features pro Klasse aggregieren")
@@ -380,16 +463,22 @@ class MBTIClassifier:
 
         # Alphabetisch nach MBTI sortieren
         agg_features.sort_values(by=['mbti'], inplace=True, ignore_index=True)
-        # TODO: Glätten mit *100 ?
         return agg_features.round(5)
 
     def train(self, input_df, output_filename):
         '''
-        ((download, nlp, features, aggregieren))
+        Training: Extrahiert Features aus den Eingabedaten, aggregiert sie pro 
+        Klasse und schreibt das Modell in eine csv/tsv-Datei.
+
+        **Parameter:**
+        - input_df (DataFrame): Eingabedaten. Muss eine Spalte user_id haben.
+        - output_filename (str): Dateiname für das Modell.
+
+        **Rückgabe**:
+        DataFrame mit den aggregierten Features.
         '''
 
         logger.info(f"Beginn Training ({input_df.shape[0]} Zeilen)")
-        # input_df = input_df[:2] # Test
         # Features extrahieren und an den DF anhängen
         features_only = self._extract_features(input_df)
         features = pd.merge(input_df, features_only, on=['user_id'])
@@ -406,6 +495,15 @@ class MBTIClassifier:
 
     def predict(self, df):
         '''
+        Vorhersage. Extrahiert Features aus den Eingabedaten und vergleicht sie 
+        mit dem Modell. 
+
+        **Parameter:**
+        - df (DataFrame): Eingabedaten. Muss eine Spalte user_id haben.
+
+        **Rückgabe:**
+        DataFrame mit Vorhersagen und Fehler für jede Instanz, auf 5 Stellen 
+        hinterm Komma gerundet.
         '''
 
         logger.info(f"Beginn Vorhersage ({len(df)} Instanzen)")
@@ -415,7 +513,7 @@ class MBTIClassifier:
         # Mergen, um invalide Daten aus df zu entfernen
         data = pd.merge(df, features, on=['user_id'])
         features_only = data.drop(columns=['user_id', 'description'])
-        # Bei Validierung/Evaluierung: MBTI-Spalte entfernen
+        # Bei Validierung/Evaluation: MBTI-Spalte entfernen
         if 'mbti' in features_only: features_only.drop(columns=['mbti'], inplace=True)
 
         # DF für die Differenzen erstellen, zunächst ohne Spalten
@@ -441,14 +539,22 @@ class MBTIClassifier:
         preds = pd.DataFrame(differences.idxmin(axis=1), columns=['prediction'])
         assert len(preds) == len(data) == len(features_only)
         preds.insert(0, 'user_id', data.user_id)
-        preds['gold'] = data.mbti
+        if 'mbti' in data: preds['gold'] = data.mbti    # bei Validierung/Evaluation
         preds['error'] = differences.min(axis=1)
         logger.info(f"Ende Vorhersage ({len(preds)} Instanzen)")
         return preds.round(5)
 
     def evaluate(self, gold):
         '''
-        Testet den Klassifikator auf den Testdaten.
+        Validierung/Evaluation. Testet den Klassifikator auf den Testdaten, 
+        schreibt die Vorhersagen in eine Datei predictions.tsv und gibt die 
+        Accuracy in die Konsole aus.
+
+        **Parameter:**
+        - gold (DataFrame): Gold-Daten, muss Spalten user_id und mbti enthalten.
+
+        **Rückgabe:**
+        Accuracy zw. 0 und 1.
         '''
 
         logger.info(f"Beginn Evaluierung ({len(gold)} Test-Instanzen, {len(self.model)} Klassen)")
@@ -472,6 +578,5 @@ if __name__ == '__main__':
     # pd.set_option('display.max_colwidth', None)
     f = 'C:/Users/Natze/Documents/Uni/Computerlinguistik/6.Semester/MBTIClassification/data/TwiSty-DE.json'
     # Leerzeilen in logfile einfügen
-    # test
     logger.info('\n\n')
-    clf = MBTIClassifier(f, 'test.tsv', train=True)
+    clf = MBTIClassifier('dataset_test.json', 'test.tsv', train=False)
