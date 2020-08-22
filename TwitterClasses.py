@@ -106,7 +106,7 @@ class User:
         if user.friends_count == 0:
             self.followers_friends_ratio = user.followers_count
         else:
-            self.followers_friends_ratio = user.followers_count/user.friends_count
+            self.followers_friends_ratio = user.friends_count/user.followers_count
         self.is_verified = user.verified
         if user.url:
             self.has_profile_url = True
