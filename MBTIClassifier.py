@@ -32,15 +32,9 @@ class MBTIClassifier:
     Klassifikator für MBTI-Persönlichkeits anhand von Twitter-Daten.
     '''
 
-    def __init__(self, input_filename, features_filename, train=False):
+    def __init__(self):
         '''
         Konstruktor.
-
-        **Parameter:**
-        - input_filename (str): Dateiname/Pfad der Eingabedaten im json-Format.
-        - features_filename (str): Name der tsv-Datei, in welche die Features gespeichert werden 
-          sollen (Training) bzw. aus welcher sie gelesen werden sollen (Inferenz).
-        - train (bool): Schaltet Trainingsmodus an/aus, standardmäßig False.
         '''
 
         # Credentials aus .env-Datei laden. Mehr Info: https://bit.ly/3glK6fd 
@@ -53,25 +47,6 @@ class MBTIClassifier:
 
         # Deutsches spaCy-Modell laden
         self.nlp = spacy.load('de_core_news_sm')
-
-        self.model = None   # @Hannah: Oder lieber als Argument in den Funktionen?
-
-        # @Hannah: Gern Ideen, wie man das besser/schöner machen kann
-        # Einkommentieren, wenn input_filename ein ungesplittetes Datenset ist
-        # self.train_data, self.val_data, self.test_data = self.split_dataset(input_filename)
-        val_data = pd.read_json('dataset_validation.json').transpose()
-        test_data = pd.read_json('dataset_test.json').transpose()
-        if train:
-            # Trainingsmodus: Trainieren + Evaluieren
-            train_data = pd.read_json(input_filename).transpose()
-            self.model = self.train(train_data, features_filename)
-            self.evaluate(val_data)
-        else:
-            # Inferenzmodus: Modell einlesen + Vorhersagen erhalten
-            self.model = pd.read_csv(features_filename, sep='\t', index_col=0)
-            input_df = pd.read_csv(input_filename, sep='\t', index_col=0)
-            self.predict(input_df)
-            self.evaluate(test_data)
 
     def _preprocess(self, fn):
         '''
@@ -465,53 +440,64 @@ class MBTIClassifier:
         agg_features.sort_values(by=['mbti'], inplace=True, ignore_index=True)
         return agg_features.round(5)
 
-    def train(self, input_df, output_filename):
+    def train(self, input_data, output_filename):
         '''
         Training: Extrahiert Features aus den Eingabedaten, aggregiert sie pro 
-        Klasse und schreibt das Modell in eine csv/tsv-Datei.
+        Klasse und schreibt das Modell in eine tsv-Datei.
 
         **Parameter:**
-        - input_df (DataFrame): Eingabedaten. Muss eine Spalte user_id haben.
+        - input_data (DataFrame|str): Eingabedaten als DataFrame oder Dateiname-
+                                      String (json). Muss eine Spalte user_id haben.
         - output_filename (str): Dateiname für das Modell.
 
         **Rückgabe**:
         DataFrame mit den aggregierten Features.
         '''
 
-        logger.info(f"Beginn Training ({input_df.shape[0]} Zeilen)")
+        # Daten einlesen, wenn nötig
+        if type(input_data) == str: input_data = self._preprocess(input_data)
+        logger.info(f"Beginn Training ({input_data.shape[0]} Zeilen)")
         # Features extrahieren und an den DF anhängen
-        features_only = self._extract_features(input_df)
-        features = pd.merge(input_df, features_only, on=['user_id'])
+        features_only = self._extract_features(input_data)
+        features = pd.merge(input_data, features_only, on=['user_id'])
         logger.info(f"Ende Training: {features.shape[0]} Zeilen, {features.shape[1]} Spalten")
 
         # Features aggregieren, d.h. für jede Klasse über alle Instanzen mitteln
         agg_features = self._aggregate_features(features)
         # Aggregierte Features in tsv-Datei schreiben
+        # Habe tsv statt json gewählt, weil es für Menschen besser lesbar ist
         agg_features.to_csv(output_filename, sep='\t')
         logger.info(f"Aggregierte Features in {output_filename} geschrieben")
         print(f"Neue Datei erstellt: {output_filename}")
-        self.model = agg_features
         return agg_features
 
-    def predict(self, df):
+    def predict(self, input_data, model):
         '''
         Vorhersage. Extrahiert Features aus den Eingabedaten und vergleicht sie 
         mit dem Modell. 
 
         **Parameter:**
-        - df (DataFrame): Eingabedaten. Muss eine Spalte user_id haben.
+        - input_data (DataFrame|str): Eingabedaten als DataFrame oder Dateiname-
+                                      String (json). Muss eine Spalte user_id haben.
+        - model (DataFrame|str): Modell als DataFrame oder Dateiname-String (tsv).
+                                 Muss eine Spalte user_id haben.
 
         **Rückgabe:**
         DataFrame mit Vorhersagen und Fehler für jede Instanz, auf 5 Stellen 
         hinterm Komma gerundet.
         '''
 
-        logger.info(f"Beginn Vorhersage ({len(df)} Instanzen)")
-        logger.info(f"Eingabe-Dimension {df.shape}, Modell-Dimension {self.model.shape}")
+        # Daten einlesen, wenn nötig
+        if type(input_data) == str: input_data = self._preprocess(input_data)
+        if type(model) == str: model = pd.read_csv(model, sep='\t', index_col=0)
+        assert type(input_data) == type(model) == pd.DataFrame
+        logger.info(f"Beginn Vorhersage ({len(input_data)} Instanzen)")
+        logger.info(f"Eingabe-Dimension {input_data.shape}, Modell-Dimension {model.shape}")
+
         # Testdaten in Feature-Repräsentation umwandeln
-        features = self._extract_features(df)
-        # Mergen, um invalide Daten aus df zu entfernen
-        data = pd.merge(df, features, on=['user_id'])
+        features = self._extract_features(input_data)
+        # Mergen, um invalide Daten aus input_data zu entfernen
+        data = pd.merge(input_data, features, on=['user_id'])
         features_only = data.drop(columns=['user_id', 'description'])
         # Bei Validierung/Evaluation: MBTI-Spalte entfernen
         if 'mbti' in features_only: features_only.drop(columns=['mbti'], inplace=True)
@@ -522,18 +508,18 @@ class MBTIClassifier:
         differences = pd.DataFrame(0, index=range(len(features_only)), columns=[])
 
         # data soll so viele Spalten haben wie model ohne MBTI
-        assert features_only.shape[1] == self.model.shape[1]-1
+        assert features_only.shape[1] == model.shape[1]-1
 
         # Verschachtelte Liste mit allen Features pro Klasse erstellen
-        model = self.model.values.tolist()
+        classes = model.values.tolist()
         # Über alle Gold-Klassen iterieren
-        for m in model:
-            logger.debug(f"Differenzen zu Klasse {m} berechnen")
+        for c in classes:
+            logger.debug(f"Differenzen zu Klasse {c} berechnen")
             # Absolute Differenz zwischen dieser Gold-Klasse und den Daten berechnen
             # *1, um Rechnung mit Bools möglich zu machen
-            diff = abs(features_only*1 - m[1:]*1)
+            diff = abs(features_only*1 - c[1:]*1)
             # Differenzen über alle Spalten aufsummieren und in jeweiliger Spalte speichern
-            differences[m[0]] = diff.sum(axis=1)
+            differences[c[0]] = diff.sum(axis=1)
 
         # Für jede Spalte Klasse mit geringster Differenz/Fehler finden = Vorhersage
         preds = pd.DataFrame(differences.idxmin(axis=1), columns=['prediction'])
@@ -549,7 +535,7 @@ class MBTIClassifier:
 
         return preds.round(5)
 
-    def evaluate(self, gold):
+    def evaluate(self, gold, model):
         '''
         Validierung/Evaluation. Testet den Klassifikator auf den Testdaten, 
         schreibt die Vorhersagen in eine Datei predictions.tsv und gibt die 
@@ -564,12 +550,7 @@ class MBTIClassifier:
 
         logger.info(f"Beginn Evaluierung")
         # Vorhersagen für Gold-Daten erhalten
-        # gold = gold[:2]
-        preds = self.predict(gold)
-        # TODO: Dateiname aus Shell übernehmen
-        preds.to_csv('predictions.tsv', sep='\t')
-        logger.info("Vorhersage in predictions.tsv geschrieben")
-        print("Neue Datei erstellt: predictions.tsv")
+        preds = self.predict(gold, model)
 
         # Accuracy berechnen
         accuracy = sum(preds.prediction == preds.gold)/len(preds)
@@ -580,8 +561,9 @@ class MBTIClassifier:
 
 if __name__ == '__main__':
     pd.set_option('display.max_columns', None)
-    # pd.set_option('display.max_colwidth', None)
-    f = 'C:/Users/Natze/Documents/Uni/Computerlinguistik/6.Semester/MBTIClassification/data/TwiSty-DE.json'
-    # Leerzeilen in logfile einfügen
-    logger.info('\n\n')
-    clf = MBTIClassifier('dataset_test.json', 'test.tsv', train=False)
+    logger.info('\n\n') # Leerzeilen in logfile einfügen
+    clf = MBTIClassifier()
+    f = 'data/TwiSty-DE.json'
+    clf.split_dataset(f)
+    clf.train('dataset_training.json', 'features.tsv')
+    clf.evaluate('dataset_validation.json', 'features.tsv')
