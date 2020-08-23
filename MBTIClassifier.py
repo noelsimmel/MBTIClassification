@@ -48,6 +48,7 @@ class MBTIClassifier:
 
         # Deutsches spaCy-Modell laden
         self.nlp = spacy.load('de_core_news_sm')
+        pd.set_option('display.max_columns', None)
 
     def _preprocess(self, fn):
         '''
@@ -256,8 +257,6 @@ class MBTIClassifier:
             url_ll = sum(t.has_url for t in tweets)
             reply_ll = sum(t.is_reply for t in tweets)
 
-            media_ll = url_ll = reply_ll = 0
-
             features = [hashtags_rate, mentions_rate, favs_rate, 
                         rts_rate, media_ll, url_ll, reply_ll]
             tweet_number = len(tweets)
@@ -303,8 +302,6 @@ class MBTIClassifier:
                     if len(token) > 1 and ':' in token.text: emoticons += 1
                 elif token.like_num: numbers += 1
                 elif not token.is_ascii: special_chars += 1
-        tweet_length = word_length = sent_length = 0
-        question_marks = exclamation_marks = numbers = adjectives = 0
         # Features hier NICHT normalisieren, da die Zahlen sonst sehr klein werden
         # Vernachlässigbar, da Tweets ja ungefähr gleich lang sind
         return [tokens_count, word_length, sent_length, len(vocab), 
@@ -542,7 +539,7 @@ class MBTIClassifier:
         Accuracy zw. 0 und 1.
         '''
 
-        logger.info(f"Beginn Evaluierung")
+        logger.info("Beginn Evaluierung")
         # Vorhersagen für Gold-Daten erhalten
         preds = self.predict(gold, model)
 
