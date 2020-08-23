@@ -5,7 +5,7 @@
 # Abgabe: 31.08.20
 
 import sys
-from MBTIClassifier import MBTIClassifier
+from mbti_classifier import MBTIClassifier
 
 def main(args):
     '''

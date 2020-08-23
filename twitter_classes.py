@@ -1,6 +1,6 @@
 # Modul: PRO2-A, SS 2020
 # Projekt: Author profiling – Twitter & MBTI personality 
-# Datei: TwitterClasses.py – Enthält 2 Klassen zur Darstellungen von Tweets und Usern
+# Datei: twitter_classes.py – Enthält 2 Klassen zur Darstellungen von Tweets und Usern
 # Autor*in: Noel Simmel (791794)
 # Abgabe: 31.08.20
 

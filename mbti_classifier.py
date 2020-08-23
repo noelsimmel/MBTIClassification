@@ -1,6 +1,6 @@
 # Modul: PRO2-A, SS 2020
 # Projekt: Author profiling – Twitter & MBTI personality types
-# Datei: MBTIClassifier.py 
+# Datei: mtbi_classifier.py – Enthält die Klassifikator-Klasse
 # Autor*in: Noel Simmel (791794)
 # Abgabe: 31.08.20
 
@@ -17,7 +17,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 import tweepy
 # Eigene Klassen
-from TwitterClasses import Tweet, User
+from twitter_classes import Tweet, User
 
 # Logging-Details
 logger = logging.getLogger(__name__)
