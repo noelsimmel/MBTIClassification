@@ -31,7 +31,6 @@ def main(args):
 
     # Training
     if len(args) > 3 and args[3] == '-t':
-        print("TRAINING")
         if len(args) == 4:
             # Datenset splitten
             clf.split_dataset(data_filename)
@@ -49,7 +48,6 @@ def main(args):
 
     # Inferenz
     else:
-        print("INFERENZ")
         # Klassifikator mit echten Daten und Features-Datei instantiieren
         clf.predict(data_filename, feature_filename)
 
@@ -58,7 +56,6 @@ if __name__ == '__main__':
     # Eingabe der Kommandozeile überprüfen
     argc = len(sys.argv)
     if argc < 3 or (argc > 5 or sys.argv[3] != '-t'):
-        print(argc, sys.argv)
         print("TRAININGSMODUS: python main.py data model -t [gold]")
         print("INFERENZMODUS: python main.py data model")
         sys.exit()

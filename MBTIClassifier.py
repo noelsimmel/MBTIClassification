@@ -43,6 +43,7 @@ class MBTIClassifier:
         auth.set_access_token(os.environ.get('ACCESS_KEY'), os.environ.get('ACCESS_SECRET'))
         # Verbindung zur Twitter-API herstellen
         self.api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
+        logger.info("\n\n") # Leerzeile bei neuem Durchlauf einfügen
         logger.info("Verbindung zur Twitter-API hergestellt")
 
         # Deutsches spaCy-Modell laden
@@ -154,16 +155,15 @@ class MBTIClassifier:
             # Pro Account 120 Tweets downloaden 
             # tweet_objects ist eine Liste von status-Objekten der Twitter-API
             # max_id bestimmt das minimale Alter der Tweets,
-            # d.h. alle Tweets wurden am/vor dem 11.08.20 verfasst (für Reproduzierbarkeit)
-            tweet_objects = self.api.user_timeline(user_id=user_id, 
-                                                   max_id=1293223325322412032, count=120)
+            # d.h. alle Tweets wurden am/vor dem 23.08.20 verfasst (für Reproduzierbarkeit)
+            tweet_objects = self.api.user_timeline(user_id=user_id, count=120,
+                                                   max_id=1297503860567801856)
             # Tweets in interne Tweet-Objekte umwandeln, Retweets ignorieren
             tweets = [Tweet(t) for t in tweet_objects if 'retweeted_status' not in t._json]     
-            if len(tweets) == 0:
-                # Wenn die Tweets aus dem Korpus inzwischen gelöscht wurden
-                logger.warning(f"User {user_id}: Keine Tweets mehr verfügbar")
-            else:
+            if len(tweets) > 0:
                 logger.debug(f"User {user_id}: {len(tweets)} Tweets heruntergeladen")
+            else:
+                logger.warning(f"User {user_id}: Keine Tweets verfügbar")
             return tweets
         # Nicht existierende Accounts abfangen
         except Exception as e:
@@ -172,7 +172,7 @@ class MBTIClassifier:
 
     def __get_valid_twitter_data(self, df):
         '''
-        HilfsExtrahiert alle validen Accounts und Tweets aus einem Dataframe.
+        Extrahiert alle validen Accounts und Tweets aus einem Dataframe.
 
         **Parameter:**
         - df (DataFrame): df mit einer Spalte user_id.
@@ -303,17 +303,10 @@ class MBTIClassifier:
                     if len(token) > 1 and ':' in token.text: emoticons += 1
                 elif token.like_num: numbers += 1
                 elif not token.is_ascii: special_chars += 1
-
-                # Features hier NICHT normalisieren, da die Zahlen sonst sehr klein werden
-                # Denke es ist vernachlässigbar, weil Tweets ja ungefähr gleich lang sind
-
-                # Über Anzahl Token im Tweet normalisieren
-                # to_normalize = [nents, question_marks, exclamation_marks, numbers, 
-                #                 adjectives, emoji, emoticons]
-                # nents, question_marks, exclamation_marks, numbers, adjectives, emoji, \
-                #     emoticons = [f/ld for f in to_normalize]
         tweet_length = word_length = sent_length = 0
         question_marks = exclamation_marks = numbers = adjectives = 0
+        # Features hier NICHT normalisieren, da die Zahlen sonst sehr klein werden
+        # Vernachlässigbar, da Tweets ja ungefähr gleich lang sind
         return [tokens_count, word_length, sent_length, len(vocab), 
                 tweet_length, nents, question_marks, exclamation_marks,  
                 numbers, adjectives, emoticons, special_chars]
@@ -428,7 +421,7 @@ class MBTIClassifier:
         # Für jede Klasse aggregieren
         for t in features.mbti.unique():
             mbti = features[features.mbti == t]
-            # pd.agg erstellt einen neuen DF mit den Durchschnittswerten aller Spalten
+            # agg erstellt einen neuen DF mit den Durchschnittswerten aller Spalten
             mbti_aggregated = mbti.agg(['mean'])
             # Am Anfang des DF eine Spalte mit dem MBTI-Typ einfügen
             if 'mbti' in mbti_aggregated: mbti_aggregated.drop(columns=['mbti'], inplace=True)
@@ -522,6 +515,7 @@ class MBTIClassifier:
             differences[c[0]] = diff.sum(axis=1)
 
         # Für jede Spalte Klasse mit geringster Differenz/Fehler finden = Vorhersage
+        # DF mit Vorhersage, Differenz und ggfs. Gold-Klasse erstellen
         preds = pd.DataFrame(differences.idxmin(axis=1), columns=['prediction'])
         assert len(preds) == len(data) == len(features_only)
         preds.insert(0, 'user_id', data.user_id)
@@ -561,7 +555,6 @@ class MBTIClassifier:
 
 if __name__ == '__main__':
     pd.set_option('display.max_columns', None)
-    logger.info('\n\n') # Leerzeilen in logfile einfügen
     clf = MBTIClassifier()
     f = 'data/TwiSty-DE.json'
     clf.split_dataset(f)
