@@ -27,6 +27,8 @@ file_handler = logging.FileHandler('classifier.log')
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
+# TODO: Progess bars
+
 class MBTIClassifier:
     '''
     Klassifikator für MBTI-Persönlichkeits anhand von Twitter-Daten.
@@ -166,8 +168,8 @@ class MBTIClassifier:
             else:
                 logger.warning(f"User {user_id}: Keine Tweets verfügbar")
             return tweets
-        # Nicht existierende Accounts abfangen
-        except Exception as e:
+        # Nichtexistente Accounts abfangen
+        except tweepy.error.TweepError as e:
             logger.warning(f"User {user_id}: Tweepy-Error: {str(e)}")
             return []
 
