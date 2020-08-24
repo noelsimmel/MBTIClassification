@@ -1,0 +1,17 @@
+Noel!
+
+Dein Programm ist bei mir ohne Probleme durchgelaufen! Ich fand es super spannend deinen Code zu lesen, da fällt einem direkt einiges am eigenen Code auf!
+Zu erst einmal habe ich einige Konzepte aus dem Kurs wieder erkannnt, namedtuples, generators, try except, raising errors, das hat mich gefreut, 
+denn ich denke du hast sie alle sonnvoll verwendet!
+Deine Kommentare finde ich sind eine gute Ergänzung deines Codes und auch die Docstrings, wo du noch einmal die Parameter jeder Methode erklärst.
+Deine Logging massages finde ich auch gut gemacht, auch dass du mit unterschiedlichen Levels arbeitest.
+Das error handling finde ich gut, du hast auf jeden Fall informative Fehlermeldungen geschrieben, haben wir ja auch gelernt dass das wichtig ist!
+Ansonnsten ist deine classifier Klasse ein bisschen lang und dadurch etwas schwerer nachzuvollziehen gewesen für mich. Ich würde eventuell überlegen ein paar
+der _Hilfsmethoden auszulagern.
+Innerhalb der Methoden finde ich deinen Code aber immer sehr aufgeräumt und übersichtlich. Dass du viel mit pandas gearbeitet hast finde ich auf jeden
+Fall interessant und es trägt auf jeden Fall dazu bei, dass dein Code angenehm lesbar ist, allerdings war es für mich dadurch schwerer nachzuvollziehen,
+da ich mich mit pandas nicht so gut auskenne und dann manchmal nicht wusste, wie genau die Datenstruktur im aktuellen Zustand aussieht.
+Ich finde das error handling wie gesagt gut, villt machst du ja noch ein paar unit tests?
+
+LG,
+Deine Hannah
