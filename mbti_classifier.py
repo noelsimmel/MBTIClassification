@@ -109,9 +109,8 @@ class MBTIClassifier:
         train.to_json('dataset_training.json', orient='index')
         val.to_json('dataset_validation.json', orient='index')
         test.to_json('dataset_test.json', orient='index')
-        logger.info("Datensätze als json-Dateien abgespeichert")
-        print("Neue Dateien erstellt: \
-                dataset_training.json, dataset_validation.json, dataset_test.json")
+        logger.info("Datensätze als json-Dateien abgespeichert: \
+                     dataset_training.json, dataset_validation.json, dataset_test.json")
 
         # TODO: Trainingsdaten oversamplen, da sonst 50% der Klassen <10 mal vertreten sind
         return train, val, test
@@ -460,7 +459,6 @@ class MBTIClassifier:
         # Habe tsv statt json gewählt, weil es für Menschen besser lesbar ist
         agg_features.to_csv(output_filename, sep='\t')
         logger.info(f"Aggregierte Features in {output_filename} geschrieben")
-        print(f"Neue Datei erstellt: {output_filename}")
         return agg_features
 
     def predict(self, input_data, model):
@@ -479,6 +477,7 @@ class MBTIClassifier:
         hinterm Komma gerundet.
         '''
 
+        # TODO: Ausgabedateiname übernehmen
         # Daten einlesen, wenn nötig
         if type(input_data) == str: input_data = self._preprocess(input_data)
         if type(model) == str: model = pd.read_csv(model, sep='\t', index_col=0)
@@ -524,7 +523,6 @@ class MBTIClassifier:
 
         preds.to_csv('predictions.tsv', sep='\t')
         logger.info("Vorhersage in predictions.tsv geschrieben")
-        print("Neue Datei erstellt: predictions.tsv")
 
         return preds.round(5)
 
@@ -548,7 +546,6 @@ class MBTIClassifier:
         # Accuracy berechnen
         accuracy = sum(preds.prediction == preds.gold)/len(preds)
         logger.info(f"Ende Evaluierung (Accuracy: {accuracy}, Fehler-Schnitt: {preds.error.mean()})")
-        print(f"Accuracy: {accuracy}")
         return accuracy
 
 
