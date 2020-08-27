@@ -28,8 +28,8 @@ def start_split_train_mode(data_filename, model_filename):
                             geschrieben werden soll.
     '''
 
-    clf.split_dataset(data_filename)
     clf = MBTIClassifier()
+    clf.split_dataset(data_filename)
     clf.train('data/dataset_training.json', model_filename)
     clf.evaluate('data/dataset_test.json', model_filename)
 
