@@ -84,7 +84,7 @@ class MBTIClassifier:
         abgestimmt auf das deutsche TwiSty-Korpus.
 
         **Parameter:**
-        - fn (str): Dateiname/Pfad der Eingabedaten (input_filename).
+        - fn (str): Dateiname/Pfad der Eingabedaten.
 
         **Rückgabe:**
         Training, Validierung, Test als Dataframes.
@@ -290,7 +290,6 @@ class MBTIClassifier:
             tweet_length += len(doc.text)
             sent_length += sum(len(s) for s in doc.sents)/len(list(doc.sents))
             nents += len(doc.ents) # named entities
-            # @Hannah: Könnte man die Schleife vereinfachen?
             for token in doc:
                 if token.is_alpha:
                     word_length += len(token)
@@ -298,9 +297,9 @@ class MBTIClassifier:
                     if token.pos_ == 'ADJ': adjectives += 1
                 elif token.is_punct:
                     if token.text == '?': question_marks += 1
-                    if token.text == '!': exclamation_marks += 1
+                    elif token.text == '!': exclamation_marks += 1
                     # Annäherung an Emoticons
-                    if len(token) > 1 and ':' in token.text: emoticons += 1
+                    elif len(token) > 1 and ':' in token.text: emoticons += 1
                 elif token.like_num: numbers += 1
                 elif not token.is_ascii: special_chars += 1
         # Features hier NICHT normalisieren, da die Zahlen sonst sehr klein werden
@@ -368,8 +367,6 @@ class MBTIClassifier:
         ling_features = list(self.__get_linguistic_features(user_tweets_zipped))
 
         # Alles in DataFrame packen
-        # @Hannah: Könnte man das vereinfachen..? 
-        # zB über alle 3 Listen gleichzeitig iterieren statt zip, findest du das lesbarer?
         features_list = list(zip(user_features, twitter_features, ling_features))
         # Leeren DF mit Spaltennamen erstellen
         all_features = pd.DataFrame(columns=list(user_features[0]._fields
@@ -554,5 +551,5 @@ if __name__ == '__main__':
     clf = MBTIClassifier()
     f = 'data/TwiSty-DE.json'
     clf.split_dataset(f)
-    clf.train('dataset_training.json', 'features.tsv')
-    clf.evaluate('dataset_validation.json', 'features.tsv')
+    clf.train('data/dataset_training.json', 'features.tsv')
+    clf.evaluate('data/dataset_validation.json', 'features.tsv')
