@@ -18,7 +18,7 @@ class TestClassifier(unittest.TestCase):
     '''
     def setUp(self):
         self.clf = MBTIClassifier()
-        self.data = 'dataset_unittest.json'
+        self.data = 'data/dataset_unittest.json'
 
     def test_1_api_connection_established(self):
         # Einen Tweet von @Twitter downloaden
@@ -31,10 +31,9 @@ class TestClassifier(unittest.TestCase):
 
     def test_3_dataset_split(self):
         train_data, val_data, test_data = self.clf.split_dataset('data/TwiSty-DE.json')
-        os.remove('dataset_training.json')
-        os.remove('dataset_validation.json')
-        os.remove('dataset_test.json')
-        print("Dateien entfernt: dataset_training.json, dataset_validation.json, dataset_test.json")
+        os.remove('data/dataset_training.json')
+        os.remove('data/dataset_validation.json')
+        os.remove('data/dataset_test.json')
         self.assertTrue(len(train_data) > len(test_data) > len(val_data))
 
     def test_4_feature_extraction(self):
@@ -56,7 +55,6 @@ class TestClassifier(unittest.TestCase):
         accuracy = self.clf.evaluate(self.data, 'unittest.tsv')
         os.remove('unittest.tsv')
         os.remove('predictions.tsv')
-        print('Dateien entfernt: unittest.tsv, predictions.tsv')
         self.assertTrue(accuracy > 0.0)
 
 
