@@ -48,13 +48,20 @@ class MBTIClassifier:
 
         # Deutsches spaCy-Modell laden
         self.nlp = spacy.load('de_core_news_sm')
+
+        # Pandas-Einstellungen (alle Spalten anzeigen)
         pd.set_option('display.max_columns', None)
 
     def split_dataset(self, fn):
         '''
         Liest die Daten ein, teilt sie in Trainings-, Validierungs- und 
-        Testdaten auf und speichert sie als json-Dateien. Verhältnis 60:19:21 
-        abgestimmt auf das deutsche TwiSty-Korpus.
+        Testdaten auf und speichert sie als json-Dateien. 
+        
+        Verhältnis 60:19:21 abgestimmt auf das deutsche TwiSty-Korpus: 
+        Da die Klassen sind sehr ungleich verteilt sind und der Datensatz sehr 
+        klein ist, ließ sich das Verhältnis 70:10:20 nicht einhalten, da sonst 
+        nicht alle 16 Klassen überall enthalten wären. Stattdessen 60:19:21 und 
+        stratifizieren.
 
         **Parameter:**
         - fn (str): Dateiname/Pfad der Eingabedaten.
@@ -67,11 +74,6 @@ class MBTIClassifier:
         data = self._preprocess(fn)
 
         # Zunächst in Trainings- und Testdaten aufsplitten
-        # Stratifizieren, d.h. beim Splitten soll das Klassenverhältnis 
-        # erhalten bleiben (da die Klassen sehr ungleich verteilt sind)
-        # Das Verhältnis 70:10:20 ließ sich aufgrund des kleinen Datensatzes
-        # nicht einhalten, da sonst nicht alle Klassen überall enthalten wären
-        # Bei 60:19:21 enthält jedes Datenset alle 16 Klassen
         temp, test = train_test_split(data, test_size=0.21, stratify=data['mbti'])
         # Aus den Trainingsdaten die Validierungsdaten abzweigen
         train, val = train_test_split(temp, test_size=0.24, stratify=temp['mbti'])
@@ -134,7 +136,6 @@ class MBTIClassifier:
         hinterm Komma gerundet.
         '''
 
-        # TODO: Ausgabedateiname übernehmen
         # Daten einlesen, wenn nötig
         if type(input_data) == str: input_data = self._preprocess(input_data)
         if type(model) == str: model = pd.read_csv(model, sep='\t', index_col=0)
@@ -149,15 +150,14 @@ class MBTIClassifier:
         features_only = data.drop(columns=['user_id', 'description'])
         # Bei Validierung/Evaluation: MBTI-Spalte entfernen
         if 'mbti' in features_only: features_only.drop(columns=['mbti'], inplace=True)
+        # data soll so viele Spalten haben wie model ohne MBTI
+        assert features_only.shape[1] == model.shape[1]-1
 
         # DF für die Differenzen erstellen, zunächst ohne Spalten
         # Finale Dimensionen: |Instanzen| * |Klassen|
         # Eine Spalte enthält jeweils die Differenzen der Instanz zu dieser Gold-Klasse
         differences = pd.DataFrame(0, index=range(len(features_only)), columns=[])
-
-        # data soll so viele Spalten haben wie model ohne MBTI
-        assert features_only.shape[1] == model.shape[1]-1
-
+        
         # Verschachtelte Liste mit allen Features pro Klasse erstellen
         classes = model.values.tolist()
         # Über alle Gold-Klassen iterieren
@@ -251,7 +251,7 @@ class MBTIClassifier:
         user_tweets_zipped = list(zip(users, tweets))
         # Features extrahieren: Account-basiert, Twitter-Metadaten-basiert, textbasiert
         logger.info("Beginn Extraktion User-Features")
-        user_features = self.__thread_function(self.__get_user_features, users, workers=10)
+        user_features = self.__thread_function(self.__get_user_features, users, workers=8)
         logger.info("Beginn Extraktion Tweet-Features")
         twitter_features = list(self.__get_twitter_features(user_tweets_zipped))
         logger.info("Beginn Extraktion linguistische Features")
@@ -262,15 +262,9 @@ class MBTIClassifier:
         # Leeren DF mit Spaltennamen erstellen
         all_features = pd.DataFrame(columns=list(user_features[0]._fields
                                     + twitter_features[0]._fields + ling_features[0]._fields))
-        # Über alle Instanzen iterieren und DF populieren, wenn IDs gleich sind
+        # Über alle Instanzen iterieren und DF populieren
         for f in features_list:
-            try:
-                assert f[0].user_id == f[1].user_id == f[2].user_id
-                all_features.loc[len(all_features)] = f[0] + f[1] + f[2]
-            except AssertionError:
-                # Wenn beim Threading etwas schief gegangen ist: Loggen und ignorieren
-                logger.debug(f"Assertion failed {f[0].user_id}/{f[1].user_id}/{f[2].user_id}")
-                continue
+            all_features.loc[len(all_features)] = f[0] + f[1] + f[2]
 
         # Doppelte Spalten (= user_id) droppen
         all_features = all_features.loc[:, ~all_features.columns.duplicated()]
@@ -352,7 +346,7 @@ class MBTIClassifier:
         # Liste mit User-IDs aus DataFrame ziehen
         users = df.user_id.values
         # Alle Tweets für alle Accounts runterladen (threaded) = verschachtelte Liste
-        tweet_list = self.__thread_function(self.__download_tweets, users, workers=10)
+        tweet_list = self.__thread_function(self.__download_tweets, users, workers=8)
 
         # Alle Accounts ignorieren, von denen keine Tweets runtergeladen werden konnten
         # z.B. weil der Account privat oder gelöscht ist
@@ -361,9 +355,9 @@ class MBTIClassifier:
         valid_tweets = [tweet_list[i] for i in range(len(tweet_list)) if len(tweet_list[i]) > 0]
         if len(valid_users) < len(users):
             logger.warning(f"{len(users)-len(valid_users)} nicht verfügbare User gelöscht \
-                            (jetzt noch {len(valid_users)} Zeilen)")
+                            (jetzt noch {len(valid_users)} User)")
         if len(valid_users) == 0:
-            raise ValueError("Keine validen User vorhanden")
+            raise RuntimeError("Keine validen User vorhanden")
         return valid_users, valid_tweets
     
     def __download_tweets(self, user_id):
@@ -436,16 +430,16 @@ class MBTIClassifier:
         - user_tweets (tuple): Enthält User-ID und Liste von Tweet-Objekten.
 
         **Rückgabe:**
-        Namedtuple TwitterFeatures: Hashtags-Rate, Mentions-Rate, Favoriten-Rate, 
-        Retweet-Rate, Likelihood für Medien im Tweet (Fotos), Likelihood für URLs 
-        im Tweet, Likelihood dass ein Tweet eine Antwort ist.
+        Namedtuple TwitterFeatures: User-ID, Hashtags-Rate, Mentions-Rate, 
+        Favoriten-Rate, Retweet-Rate, Likelihood für Medien im Tweet (Fotos), 
+        Likelihood für URLs im Tweet, Likelihood dass ein Tweet eine Antwort ist.
         '''
 
         field_names = ['user_id', 'hashtags', 'mentions', 'favs', 'rts', 
                        'media_ll', 'url_ll', 'reply_ll']
         TwitterFeatures = namedtuple('TwitterFeatures', field_names)
         for user_id, tweets in user_tweets:
-            # logger.debug(f"Twitter-Features für {user_id} extrahieren")
+            logger.debug(f"Twitter-Features für {user_id} extrahieren")
             # Tweet-Statistiken (aus den heruntergeladenen Tweets extrahieren)
             # rate = Absolute Häufigkeit des Attributes / Anzahl an Tweets für diese*n User
             hashtags_rate = sum(t.hashtags_count for t in tweets)
@@ -477,7 +471,9 @@ class MBTIClassifier:
         - user_tweets (tuple): Enthält User-ID und Liste von Tweet-Objekten.
 
         **Rückgabe:**
-        Namedtuple  mit Features.
+        Namedtuple LingFeatures: User-ID, Zahl Tokens, Wortlänge, Satzlänge, 
+        Größe d. Vokabulars, Tweet-Länge, Named Entities, Fragezeichen, 
+        Ausrufezeichen, Zahlen, Adjektive, Emoticons, Sonderzeichen.
         '''
 
         field_names = ['user_id', 'tokens_count', 'word_length', 'sent_length', 
@@ -506,7 +502,7 @@ class MBTIClassifier:
         - texts (list): Liste von Tweets als Strings.
 
         **Rückgabe:**
-        Liste mit Features.
+        Liste mit Features, s. __get_linguistic_features().
         '''
 
         tokens_count = special_chars = emoticons = nents = 0 
@@ -545,5 +541,5 @@ if __name__ == '__main__':
     clf = MBTIClassifier()
     f = 'data/TwiSty-DE.json'
     clf.split_dataset(f)
-    clf.train('data/dataset_training.json', 'features.tsv')
-    clf.evaluate('data/dataset_validation.json', 'features.tsv')
+    clf.train('data/dataset_training.json', 'model.tsv')
+    clf.evaluate('data/dataset_validation.json', 'model.tsv')
