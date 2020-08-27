@@ -107,10 +107,9 @@ def main(args):
         start_train_mode(data_filename, model_filename, gold_filename)
     else:
         print("TRAININGSMODUS: python main.py data model -t [gold]")
-        print("INFERENZMODUS: python main.py data model")
+        print("INFERENZMODUS: python main.py data model output")
         sys.exit()
 
 
 if __name__ == '__main__':
-    # Main-Funktion ausführen
     main(sys.argv)
