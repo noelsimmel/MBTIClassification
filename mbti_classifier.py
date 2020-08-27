@@ -106,10 +106,10 @@ class MBTIClassifier:
         logger.info(f"Datensatz in Train/Val/Test gesplittet, Verhältnis \
              {(len(train)/len(data)):.2f}/{(len(val)/len(data)):.2f}/{(len(test)/len(data)):.2f}")
 
-        train.to_json('dataset_training.json', orient='index')
-        val.to_json('dataset_validation.json', orient='index')
-        test.to_json('dataset_test.json', orient='index')
-        logger.info("Datensätze als json-Dateien abgespeichert: \
+        train.to_json('data/dataset_training.json', orient='index')
+        val.to_json('data/dataset_validation.json', orient='index')
+        test.to_json('data/dataset_test.json', orient='index')
+        logger.info("Datensätze als json-Dateien im data-Ordner abgespeichert: \
                      dataset_training.json, dataset_validation.json, dataset_test.json")
 
         # TODO: Trainingsdaten oversamplen, da sonst 50% der Klassen <10 mal vertreten sind
