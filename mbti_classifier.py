@@ -9,12 +9,12 @@ from collections import namedtuple
 import concurrent.futures
 import logging
 import os
-import spacy
 # from spacy_langdetect import LanguageDetector
 # Externe Module
 import dotenv
 import pandas as pd
 from sklearn.model_selection import train_test_split
+import spacy
 import tweepy
 # Eigene Klassen
 from twitter_classes import Tweet, User
