@@ -4,7 +4,7 @@ Erstellt Persönlichkeitsprofile für Twitter-Nutzende anhand des Myers-Briggs T
 ## Installation
 Entwickelt mit Python 3.8.3 unter Windows 10 Home.
 
-```main.py```, ```mbti_classifier.py``` und ```twitter_classes.py``` müssen heruntergeladen werden. Es wird ein Standard-Zugang zur Twitter-API benötigt; die Zugangsdaten sollen in einer .env-Datei abgespeichert werden (Vorlage im Repo).
+Es wird ein Standard-Zugang zur Twitter-API benötigt; die Zugangsdaten sollen in einer .env-Datei abgespeichert werden (Vorlage im Repo). Alle nötigen Module sind in ```requirements.txt``` zu finden.
 
 Der Klassifikator kann z.B. auf dem (deutschen) [TwiSty-Korpus](https://www.uantwerpen.be/en/research-groups/clips/research/datasets/) trainiert werden. Alternativ kann jede .json-Datei mit den Schlüsseln "user_id" und "mbti" verwendet werden. Die User-ID ist für jeden Twitter-Account einzigartig und kann nicht geändert werden, anders als der Nutzer-/Anzeigename (@). Nutzernamen können z.B. [hier](https://tweeterid.com/) in User-IDs umgewandelt werden.
 
