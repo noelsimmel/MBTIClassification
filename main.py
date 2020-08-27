@@ -5,12 +5,69 @@
 # Abgabe: 31.08.20
 
 import sys
-from MBTIClassifier import MBTIClassifier
+from mbti_classifier import MBTIClassifier
+
+class BadInputError(Exception):
+    '''
+    Fehlerklasse für fehlerhafte User-Eingaben.
+    '''
+
+    def __init__(self, msg):
+        super().__init__(msg)
+
+def start_split_train_mode(data_filename, model_filename):
+    '''
+    Splittet die Eingabedaten in Trainings-, Validierungs- und Testdaten auf  
+    und schreibt diese in den data-Ordner. Im Anschluss wird der Klassifikator 
+    direkt mit diesen Dateien trainiert und getestet.
+
+    **Parameter:**
+    - data_filename (str): Dateiname/Pfad der Eingabedaten. Muss eine 
+                           json-Datei mit Schlüsseln user_id und mbti sein.
+    - model_filename (str): Name der Datei, in die das Modell im tsv-Format 
+                            geschrieben werden soll.
+    '''
+
+    clf.split_dataset(data_filename)
+    clf = MBTIClassifier()
+    clf.train('data/dataset_training.json', model_filename)
+    clf.evaluate('data/dataset_test.json', model_filename)
+
+def start_train_mode(data_filename, model_filename, gold_filename):
+    '''
+    Trainiert den Klassifikator auf den Trainingsdaten und evaluiert ihn auf 
+    den Gold-Daten.
+
+    **Parameter:**
+    - data_filename (str): Dateiname/Pfad der Trainingsdaten. Muss eine 
+                           json-Datei mit Schlüsseln user_id und mbti sein.
+    - model_filename (str): Name der Datei, in die das Modell im tsv-Format 
+                            geschrieben werden soll.
+    - gold_filename (str): Dateiname/Pfad der Testdaten. Muss eine 
+                           json-Datei mit Schlüsseln user_id und mbti sein.
+    '''
+
+    clf = MBTIClassifier()
+    clf.train(data_filename, model_filename)
+    clf.evaluate(gold_filename, model_filename)
+
+def start_predict_mode(data_filename, model_filename):
+    '''
+    Startet den Inferenzmodus für die Eingabedaten mit dem trainierten Klassifikator.
+
+    **Parameter:**
+    - data_filename (str): Dateiname/Pfad der Eingabedaten. Muss eine 
+                           json-Datei mit Schlüssel user_id sein.
+    - model_filename (str): Name/Pfad der tsv-Datei mit dem trainierten Modell.
+    '''
+
+    clf = MBTIClassifier()
+    clf.predict(data_filename, model_filename)
 
 def main(args):
     '''
     Main-Funktion. 
-    Trainiert den Klassifikator oder benutzt ihn für die Klassifikation.
+    Überprüft den User-Input und ruft den entsprechenden Programmmodus auf.
 
     **Parameter**:
     - args (list): Argumentliste aus der Kommandozeile. 
@@ -23,41 +80,37 @@ def main(args):
         4. (optional) Name der json-Datei mit den Testdaten.
     '''
 
-    data_filename = args[1]
-    feature_filename = args[2]
-    assert data_filename[-5:] == '.json'
-    assert feature_filename[-4:] == '.tsv'
-    clf = MBTIClassifier()
-
-    # Training
-    if len(args) > 3 and args[3] == '-t':
-        if len(args) == 4:
-            # Datenset splitten
-            clf.split_dataset(data_filename)
-            clf.train('dataset_training.json', feature_filename)
-            clf.evaluate('dataset_test.json', feature_filename)
-        
-        else:
-            gold_filename = args[4]
-            assert gold_filename[-5:] == '.json'
-            # Klassifikator mit Trainingsdaten instantiieren
-            # Die Features werden in feature_filename gespeichert und können 
-            # im Inferenzschritt daraus eingelesen werden
-            clf.train(data_filename, feature_filename)
-            clf.evaluate(gold_filename, feature_filename)
-
-    # Inferenz
-    else:
-        # Klassifikator mit echten Daten und Features-Datei instantiieren
-        clf.predict(data_filename, feature_filename)
-
-
-if __name__ == '__main__':
-    # Eingabe der Kommandozeile überprüfen
-    argc = len(sys.argv)
-    if argc < 3 or (argc > 5 or sys.argv[3] != '-t'):
+    argc = len(args)
+    if argc < 3 or argc > 5:
         print("TRAININGSMODUS: python main.py data model -t [gold]")
         print("INFERENZMODUS: python main.py data model")
         sys.exit()
+
+    data_filename = args[1]
+    if data_filename[-5:] != '.json': 
+        raise BadInputError("Eingabedaten müssen im json-Format sein")
+    model_filename = args[2]
+    if model_filename[-4:] != '.tsv':
+        raise BadInputError("Modell muss im tsv-Format sein")
+
+    if argc == 3:
+        # Inferenzmodus
+        start_predict_mode(data_filename, model_filename)
+    elif argc == 4 and args[3] == '-t':
+        # Trainingsmodus mit Datenset-Split
+        start_split_train_mode(data_filename, model_filename)
+    elif argc == 5 and args[3] == '-t':
+        # Trainingsmodus ohne Split
+        gold_filename = args[4]
+        if gold_filename[-5:] != '.json':
+            raise BadInputError("Eingabedaten müssen im json-Format sein")
+        start_train_mode(data_filename, model_filename, gold_filename)
+    else:
+        print("TRAININGSMODUS: python main.py data model -t [gold]")
+        print("INFERENZMODUS: python main.py data model")
+        sys.exit()
+
+
+if __name__ == '__main__':
     # Main-Funktion ausführen
     main(sys.argv)

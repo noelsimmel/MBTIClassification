@@ -1,6 +1,6 @@
 # Modul: PRO2-A, SS 2020
 # Projekt: Author profiling – Twitter & MBTI personality types
-# Datei: MBTIClassifier.py 
+# Datei: mtbi_classifier.py – Enthält die Klassifikator-Klasse
 # Autor*in: Noel Simmel (791794)
 # Abgabe: 31.08.20
 
@@ -17,7 +17,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 import tweepy
 # Eigene Klassen
-from TwitterClasses import Tweet, User
+from twitter_classes import Tweet, User
 
 # Logging-Details
 logger = logging.getLogger(__name__)
@@ -26,6 +26,8 @@ formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(funcName)s:%(message)
 file_handler = logging.FileHandler('classifier.log')
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
+
+# TODO: Progess bars
 
 class MBTIClassifier:
     '''
@@ -82,7 +84,7 @@ class MBTIClassifier:
         abgestimmt auf das deutsche TwiSty-Korpus.
 
         **Parameter:**
-        - fn (str): Dateiname/Pfad der Eingabedaten (input_filename).
+        - fn (str): Dateiname/Pfad der Eingabedaten.
 
         **Rückgabe:**
         Training, Validierung, Test als Dataframes.
@@ -104,12 +106,11 @@ class MBTIClassifier:
         logger.info(f"Datensatz in Train/Val/Test gesplittet, Verhältnis \
              {(len(train)/len(data)):.2f}/{(len(val)/len(data)):.2f}/{(len(test)/len(data)):.2f}")
 
-        train.to_json('dataset_training.json', orient='index')
-        val.to_json('dataset_validation.json', orient='index')
-        test.to_json('dataset_test.json', orient='index')
-        logger.info("Datensätze als json-Dateien abgespeichert")
-        print("Neue Dateien erstellt: \
-                dataset_training.json, dataset_validation.json, dataset_test.json")
+        train.to_json('data/dataset_training.json', orient='index')
+        val.to_json('data/dataset_validation.json', orient='index')
+        test.to_json('data/dataset_test.json', orient='index')
+        logger.info("Datensätze als json-Dateien im data-Ordner abgespeichert: \
+                     dataset_training.json, dataset_validation.json, dataset_test.json")
 
         # TODO: Trainingsdaten oversamplen, da sonst 50% der Klassen <10 mal vertreten sind
         return train, val, test
@@ -166,8 +167,8 @@ class MBTIClassifier:
             else:
                 logger.warning(f"User {user_id}: Keine Tweets verfügbar")
             return tweets
-        # Nicht existierende Accounts abfangen
-        except Exception as e:
+        # Nichtexistente Accounts abfangen
+        except tweepy.error.TweepError as e:
             logger.warning(f"User {user_id}: Tweepy-Error: {str(e)}")
             return []
 
@@ -289,7 +290,6 @@ class MBTIClassifier:
             tweet_length += len(doc.text)
             sent_length += sum(len(s) for s in doc.sents)/len(list(doc.sents))
             nents += len(doc.ents) # named entities
-            # @Hannah: Könnte man die Schleife vereinfachen?
             for token in doc:
                 if token.is_alpha:
                     word_length += len(token)
@@ -297,9 +297,9 @@ class MBTIClassifier:
                     if token.pos_ == 'ADJ': adjectives += 1
                 elif token.is_punct:
                     if token.text == '?': question_marks += 1
-                    if token.text == '!': exclamation_marks += 1
+                    elif token.text == '!': exclamation_marks += 1
                     # Annäherung an Emoticons
-                    if len(token) > 1 and ':' in token.text: emoticons += 1
+                    elif len(token) > 1 and ':' in token.text: emoticons += 1
                 elif token.like_num: numbers += 1
                 elif not token.is_ascii: special_chars += 1
         # Features hier NICHT normalisieren, da die Zahlen sonst sehr klein werden
@@ -367,8 +367,6 @@ class MBTIClassifier:
         ling_features = list(self.__get_linguistic_features(user_tweets_zipped))
 
         # Alles in DataFrame packen
-        # @Hannah: Könnte man das vereinfachen..? 
-        # zB über alle 3 Listen gleichzeitig iterieren statt zip, findest du das lesbarer?
         features_list = list(zip(user_features, twitter_features, ling_features))
         # Leeren DF mit Spaltennamen erstellen
         all_features = pd.DataFrame(columns=list(user_features[0]._fields
@@ -458,7 +456,6 @@ class MBTIClassifier:
         # Habe tsv statt json gewählt, weil es für Menschen besser lesbar ist
         agg_features.to_csv(output_filename, sep='\t')
         logger.info(f"Aggregierte Features in {output_filename} geschrieben")
-        print(f"Neue Datei erstellt: {output_filename}")
         return agg_features
 
     def predict(self, input_data, model):
@@ -477,6 +474,7 @@ class MBTIClassifier:
         hinterm Komma gerundet.
         '''
 
+        # TODO: Ausgabedateiname übernehmen
         # Daten einlesen, wenn nötig
         if type(input_data) == str: input_data = self._preprocess(input_data)
         if type(model) == str: model = pd.read_csv(model, sep='\t', index_col=0)
@@ -522,7 +520,6 @@ class MBTIClassifier:
 
         preds.to_csv('predictions.tsv', sep='\t')
         logger.info("Vorhersage in predictions.tsv geschrieben")
-        print("Neue Datei erstellt: predictions.tsv")
 
         return preds.round(5)
 
@@ -546,7 +543,6 @@ class MBTIClassifier:
         # Accuracy berechnen
         accuracy = sum(preds.prediction == preds.gold)/len(preds)
         logger.info(f"Ende Evaluierung (Accuracy: {accuracy}, Fehler-Schnitt: {preds.error.mean()})")
-        print(f"Accuracy: {accuracy}")
         return accuracy
 
 
@@ -555,5 +551,5 @@ if __name__ == '__main__':
     clf = MBTIClassifier()
     f = 'data/TwiSty-DE.json'
     clf.split_dataset(f)
-    clf.train('dataset_training.json', 'features.tsv')
-    clf.evaluate('dataset_validation.json', 'features.tsv')
+    clf.train('data/dataset_training.json', 'features.tsv')
+    clf.evaluate('data/dataset_validation.json', 'features.tsv')
