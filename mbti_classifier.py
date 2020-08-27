@@ -23,7 +23,7 @@ from twitter_classes import Tweet, User
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(funcName)s:%(message)s')
-file_handler = logging.FileHandler('classifier.log')
+file_handler = logging.FileHandler('mbti_classifier.log')
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
@@ -251,7 +251,7 @@ class MBTIClassifier:
         user_tweets_zipped = list(zip(users, tweets))
         # Features extrahieren: Account-basiert, Twitter-Metadaten-basiert, textbasiert
         logger.info("Beginn Extraktion User-Features")
-        user_features = self.__thread_function(self.__get_user_features, users, workers=8)
+        user_features = self.__thread_function(self.__get_user_features, users)
         logger.info("Beginn Extraktion Tweet-Features")
         twitter_features = list(self.__get_twitter_features(user_tweets_zipped))
         logger.info("Beginn Extraktion linguistische Features")
@@ -313,7 +313,7 @@ class MBTIClassifier:
         agg_features.sort_values(by=['mbti'], inplace=True, ignore_index=True)
         return agg_features.round(5)
     
-    def __thread_function(self, func, args, workers=5):
+    def __thread_function(self, func, args, workers=10):
         '''
         Threadet eine beliebige Funktion, d.h. implementiert Concurrency, um 
         I/O-Funktionen (Twitter-Download) schneller zu machen.
@@ -321,7 +321,7 @@ class MBTIClassifier:
         **Parameter:**
         - func (function): Name der Funktion, die gethreaded werden soll.
         - args (iterable): Argumente der Funktion.
-        - workers (int): Maximale Anzahl an Threads, standardmäßig 5.
+        - workers (int): Maximale Anzahl an Threads, standardmäßig 10.
 
         **Rückgabe:**
         Liste der Funktionswerte.
@@ -346,7 +346,7 @@ class MBTIClassifier:
         # Liste mit User-IDs aus DataFrame ziehen
         users = df.user_id.values
         # Alle Tweets für alle Accounts runterladen (threaded) = verschachtelte Liste
-        tweet_list = self.__thread_function(self.__download_tweets, users, workers=8)
+        tweet_list = self.__thread_function(self.__download_tweets, users)
 
         # Alle Accounts ignorieren, von denen keine Tweets runtergeladen werden konnten
         # z.B. weil der Account privat oder gelöscht ist
