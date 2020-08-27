@@ -117,7 +117,7 @@ class MBTIClassifier:
         logger.info(f"Aggregierte Features in {output_filename} geschrieben")
         return agg_features
 
-    def predict(self, input_data, model):
+    def predict(self, input_data, model, output_filename):
         '''
         Vorhersage. Extrahiert Features aus den Eingabedaten und vergleicht sie 
         mit dem Modell. 
@@ -127,6 +127,7 @@ class MBTIClassifier:
                                       String (json). Muss eine Spalte user_id haben.
         - model (DataFrame|str): Modell als DataFrame oder Dateiname-String (tsv).
                                  Muss eine Spalte user_id haben.
+        - output_filename (str): Dateiname für die Vorhersagen (tsv).
 
         **Rückgabe:**
         DataFrame mit Vorhersagen und Fehler für jede Instanz, auf 5 Stellen 
@@ -177,8 +178,8 @@ class MBTIClassifier:
         preds['error'] = differences.min(axis=1)
         logger.info(f"Ende Vorhersage ({len(preds)} Instanzen)")
 
-        preds.to_csv('predictions.tsv', sep='\t')
-        logger.info("Vorhersage in predictions.tsv geschrieben")
+        preds.to_csv(output_filename, sep='\t')
+        logger.info(f"Vorhersage in {output_filename} geschrieben")
 
         return preds.round(5)
 
@@ -197,7 +198,7 @@ class MBTIClassifier:
 
         logger.info("Beginn Evaluierung")
         # Vorhersagen für Gold-Daten erhalten
-        preds = self.predict(gold, model)
+        preds = self.predict(gold, model, 'gold_predictions.tsv')
 
         # Accuracy berechnen
         accuracy = sum(preds.prediction == preds.gold)/len(preds)
@@ -378,7 +379,6 @@ class MBTIClassifier:
         Bei privaten oder gelöschten Accounts eine leere Liste.
         '''
 
-        # TODO: Statt User-ID auch Nutzername annehmen
         try:
             # Wenn Account privat ist, leere Liste zurückgeben
             if self.api.get_user(user_id=user_id).protected:
@@ -538,6 +538,7 @@ class MBTIClassifier:
         return [tokens_count, word_length, sent_length, len(vocab), 
                 tweet_length, nents, question_marks, exclamation_marks,  
                 numbers, adjectives, emoticons, special_chars]
+
 
 if __name__ == '__main__':
     pd.set_option('display.max_columns', None)

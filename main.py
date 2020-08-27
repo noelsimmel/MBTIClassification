@@ -51,7 +51,7 @@ def start_train_mode(data_filename, model_filename, gold_filename):
     clf.train(data_filename, model_filename)
     clf.evaluate(gold_filename, model_filename)
 
-def start_predict_mode(data_filename, model_filename):
+def start_predict_mode(data_filename, model_filename, output_filename):
     '''
     Startet den Inferenzmodus für die Eingabedaten mit dem trainierten Klassifikator.
 
@@ -59,10 +59,12 @@ def start_predict_mode(data_filename, model_filename):
     - data_filename (str): Dateiname/Pfad der Eingabedaten. Muss eine 
                            json-Datei mit Schlüssel user_id sein.
     - model_filename (str): Name/Pfad der tsv-Datei mit dem trainierten Modell.
+    - output_filename (str): Name/Pfad für die tsv-Datei, in die die Vorhersagen 
+                             gespeichert werden sollen.
     '''
 
     clf = MBTIClassifier()
-    clf.predict(data_filename, model_filename)
+    clf.predict(data_filename, model_filename, output_filename)
 
 def main(args):
     '''
@@ -81,11 +83,6 @@ def main(args):
     '''
 
     argc = len(args)
-    if argc < 3 or argc > 5:
-        print("TRAININGSMODUS: python main.py data model -t [gold]")
-        print("INFERENZMODUS: python main.py data model")
-        sys.exit()
-
     data_filename = args[1]
     if data_filename[-5:] != '.json': 
         raise BadInputError("Eingabedaten müssen im json-Format sein")
@@ -93,9 +90,12 @@ def main(args):
     if model_filename[-4:] != '.tsv':
         raise BadInputError("Modell muss im tsv-Format sein")
 
-    if argc == 3:
+    if argc == 4 and args[3] != '-t':
         # Inferenzmodus
-        start_predict_mode(data_filename, model_filename)
+        output_filename = args[3]
+        if output_filename[-4:] != '.tsv':
+            raise BadInputError("Ausgabedatei muss im tsv-Format sein")
+        start_predict_mode(data_filename, model_filename, output_filename)
     elif argc == 4 and args[3] == '-t':
         # Trainingsmodus mit Datenset-Split
         start_split_train_mode(data_filename, model_filename)
