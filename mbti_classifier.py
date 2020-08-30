@@ -9,7 +9,6 @@ from collections import namedtuple
 import concurrent.futures
 import logging
 import os
-# from spacy_langdetect import LanguageDetector
 # Externe Module
 import dotenv
 import pandas as pd
@@ -23,7 +22,7 @@ from twitter_classes import Tweet, User
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(funcName)s:%(message)s')
-file_handler = logging.FileHandler('mbti_classifier.log')
+file_handler = logging.FileHandler('logfile.log')
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
@@ -49,17 +48,15 @@ class MBTIClassifier:
         dotenv.load_dotenv('.env')
         auth = tweepy.OAuthHandler(os.environ.get('CONSUMER_KEY'), 
                                    os.environ.get('CONSUMER_SECRET'))
-        auth.set_access_token(os.environ.get('ACCESS_KEY'), os.environ.get('ACCESS_SECRET'))
+        auth.set_access_token(os.environ.get('ACCESS_KEY'), 
+                              os.environ.get('ACCESS_SECRET'))
         # Verbindung zur Twitter-API herstellen
         self.api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
         logger.info("\n\n") # Leerzeile bei neuem Durchlauf einfügen
         logger.info("Verbindung zur Twitter-API hergestellt")
 
-        # Deutsches spaCy-Modell laden
+        # Deutsches spaCy-Modell laden – bei Bedarf ändern
         self.nlp = spacy.load('de_core_news_sm')
-
-        # Pandas-Einstellungen (alle Spalten anzeigen)
-        pd.set_option('display.max_columns', None)
 
     def split_dataset(self, fn):
         '''
@@ -76,7 +73,8 @@ class MBTIClassifier:
         - fn (str): Dateiname/Pfad der Eingabedaten.
 
         **Rückgabe:**
-        Training, Validierung, Test als Dataframes.
+        Training, Validierung, Test als Dataframes. Die DFs werden außerdem in 
+        json-Dateien geschrieben.
         '''
 
         # Daten einlesen und vorverarbeiten
@@ -236,7 +234,7 @@ class MBTIClassifier:
             corpus.reset_index(inplace=True)
             # Relevante Spalten in neuen DF übernehmen
             df = pd.DataFrame()
-            if 'mbti' in corpus: df['mbti'] = corpus['mbti']
+            if 'mbti' in corpus: df['mbti'] = corpus['mbti']    # Bei Validierung/Evaluation
             # User-ID von String zu Int casten
             df['user_id'] = corpus['user_id'].astype('int64')
             logger.info(f"Daten von {fn} eingelesen ({len(df)} Zeilen)")
@@ -372,7 +370,8 @@ class MBTIClassifier:
             logger.warning(f"{len(users)-len(valid_users)} nicht verfügbare User gelöscht"
                            f"(jetzt noch {len(valid_users)} User)")
         if len(valid_users) == 0:
-            raise RuntimeError("Keine validen User vorhanden")
+            raise BadInputError("Keine validen User in Eingabedaten. "
+                                "Alle Accounts sind nicht öffentlich oder gelöscht.")
         return valid_users, valid_tweets
     
     def __download_tweets(self, user_id):
@@ -439,7 +438,7 @@ class MBTIClassifier:
 
     def __get_twitter_features(self, user_tweets):
         '''
-        Extrahiert Tweet-Features für einen Account.
+        Generator: Extrahiert Tweet-Features für einen Account.
 
         **Parameter:**
         - user_tweets (tuple): Enthält User-ID und Liste von Tweet-Objekten.
@@ -447,7 +446,7 @@ class MBTIClassifier:
         **Rückgabe:**
         Namedtuple TwitterFeatures: User-ID, Hashtags-Rate, Mentions-Rate, 
         Favoriten-Rate, Retweet-Rate, Likelihood für Medien im Tweet (Fotos), 
-        Likelihood für URLs im Tweet, Likelihood dass ein Tweet eine Antwort ist.
+        Likelihood für URLs im Tweet, Likelihood, dass ein Tweet eine Antwort ist.
         '''
 
         field_names = ['user_id', 'hashtags', 'mentions', 'favs', 'rts', 
@@ -479,8 +478,8 @@ class MBTIClassifier:
     
     def __get_linguistic_features(self, user_tweets):
         '''
-        Extrahiert linguistische Features aus Tweets eines Accounts. Alle Features 
-        werden über die Anzahl an Tweets normalisiert.
+        Generator: Extrahiert linguistische Features aus Tweets eines Accounts. 
+        Alle Features werden über die Anzahl an Tweets normalisiert.
 
         **Parameter:**
         - user_tweets (tuple): Enthält User-ID und Liste von Tweet-Objekten.
