@@ -27,6 +27,14 @@ file_handler = logging.FileHandler('mbti_classifier.log')
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
+class BadInputError(Exception):
+    '''
+    Fehlerklasse für fehlerhafte User-Eingaben.
+    '''
+
+    def __init__(self, msg):
+        super().__init__(msg)
+
 class MBTIClassifier:
     '''
     Klassifikator für MBTI-Persönlichkeits anhand von Twitter-Daten.
@@ -78,14 +86,15 @@ class MBTIClassifier:
         # Aus den Trainingsdaten die Validierungsdaten abzweigen
         train, val = train_test_split(temp, test_size=0.24, stratify=temp['mbti'])
         assert len(train.columns) == len(test.columns) == len(test.columns) 
-        logger.info(f"Datensatz in Train/Val/Test gesplittet, Verhältnis \
-             {(len(train)/len(data)):.2f}/{(len(val)/len(data)):.2f}/{(len(test)/len(data)):.2f}")
+        logger.info("Datensatz in Train/Val/Test gesplittet, Verhältnis "
+                    f"{(len(train)/len(data)):.2f}/{(len(val)/len(data)):.2f}/"
+                    f"{(len(test)/len(data)):.2f}")
 
         train.to_json('data/dataset_training.json', orient='index')
         val.to_json('data/dataset_validation.json', orient='index')
         test.to_json('data/dataset_test.json', orient='index')
-        logger.info("Datensätze als json-Dateien im data-Ordner abgespeichert: \
-                     dataset_training.json, dataset_validation.json, dataset_test.json")
+        logger.info("Datensätze als json-Dateien im data-Ordner abgespeichert: "
+                    "dataset_training.json, dataset_validation.json, dataset_test.json")
 
         return train, val, test
     
@@ -218,17 +227,21 @@ class MBTIClassifier:
         DataFrame mit Spalte user_id und bei Trainingdaten mbti.
         '''
 
-        # Dataframe mit n Zeilen, 6 Spalten
-        corpus = pd.read_json(fn).transpose()
-        # Fortlaufender Index statt User ID als Index
-        corpus.reset_index(inplace=True)
-        # Relevante Spalten in neuen DF übernehmen
-        df = pd.DataFrame()
-        if 'mbti' in corpus: df['mbti'] = corpus['mbti']
-        # User-ID von String zu Int casten
-        df['user_id'] = corpus['user_id'].astype('int64')
-        logger.info(f"Daten von {fn} eingelesen ({len(df)} Zeilen)")
-        return df
+        try:
+            # Dataframe mit n Zeilen, 6 Spalten
+            corpus = pd.read_json(fn).transpose()
+            # Fortlaufender Index statt User ID als Index
+            corpus.reset_index(inplace=True)
+            # Relevante Spalten in neuen DF übernehmen
+            df = pd.DataFrame()
+            if 'mbti' in corpus: df['mbti'] = corpus['mbti']
+            # User-ID von String zu Int casten
+            df['user_id'] = corpus['user_id'].astype('int64')
+            logger.info(f"Daten von {fn} eingelesen ({len(df)} Zeilen)")
+            return df
+        except ValueError:
+            raise BadInputError(f"Falscher Dateiname oder falsches Format für {fn}. "
+                  "Muss .json sein.")
 
     def _extract_features(self, df):
         '''
@@ -272,8 +285,8 @@ class MBTIClassifier:
         all_features = all_features.round(5)
         # User-ID muss int64 sein wie im Eingabe-DF
         all_features['user_id'] = all_features['user_id'].astype('int64')
-        logger.info(f"Ende Feature-Extraktion: \
-                    {all_features.shape[0]} Instanzen, {all_features.shape[1]-1} Features")
+        logger.info("Ende Feature-Extraktion: "
+                    f"{all_features.shape[0]} Instanzen, {all_features.shape[1]-1} Features")
         return all_features
     
     def _aggregate_features(self, df):
@@ -354,8 +367,8 @@ class MBTIClassifier:
         valid_users = [users[i] for i in range(len(users)) if len(tweet_list[i]) > 0]
         valid_tweets = [tweet_list[i] for i in range(len(tweet_list)) if len(tweet_list[i]) > 0]
         if len(valid_users) < len(users):
-            logger.warning(f"{len(users)-len(valid_users)} nicht verfügbare User gelöscht \
-                            (jetzt noch {len(valid_users)} User)")
+            logger.warning(f"{len(users)-len(valid_users)} nicht verfügbare User gelöscht"
+                           f"(jetzt noch {len(valid_users)} User)")
         if len(valid_users) == 0:
             raise RuntimeError("Keine validen User vorhanden")
         return valid_users, valid_tweets
