@@ -47,7 +47,8 @@ class MBTIClassifier:
 
         # Credentials aus .env-Datei laden. Mehr Info: https://bit.ly/3glK6fd 
         dotenv.load_dotenv('.env')
-        auth = tweepy.OAuthHandler(os.environ.get('CONSUMER_KEY'), os.environ.get('CONSUMER_SECRET'))
+        auth = tweepy.OAuthHandler(os.environ.get('CONSUMER_KEY'), 
+                                   os.environ.get('CONSUMER_SECRET'))
         auth.set_access_token(os.environ.get('ACCESS_KEY'), os.environ.get('ACCESS_SECRET'))
         # Verbindung zur Twitter-API herstellen
         self.api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
@@ -211,7 +212,8 @@ class MBTIClassifier:
 
         # Accuracy berechnen
         accuracy = sum(preds.prediction == preds.gold)/len(preds)
-        logger.info(f"Ende Evaluierung (Accuracy: {accuracy}, Fehler-Schnitt: {preds.error.mean()})")
+        logger.info(f"Ende Evaluierung (Accuracy: {accuracy}, "
+                    f"Fehler-Schnitt: {preds.error.mean()})")
         return accuracy
 
     def _preprocess(self, fn):
