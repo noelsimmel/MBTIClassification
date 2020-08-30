@@ -104,7 +104,7 @@ class User:
         if user.description:
             self.description = user.description
         if user.followers_count == 0:
-            self.followers_friends_ratio = user.followers_count
+            self.followers_friends_ratio = user.friends_count
         else:
             self.followers_friends_ratio = user.friends_count/user.followers_count
         self.is_verified = user.verified
