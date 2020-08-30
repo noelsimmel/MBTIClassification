@@ -10,7 +10,7 @@ import logging
 twitter_logger = logging.getLogger(__name__)
 twitter_logger.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(funcName)s:%(message)s')
-file_handler = logging.FileHandler('classifier.log')
+file_handler = logging.FileHandler('logfile.log')
 file_handler.setFormatter(formatter)
 twitter_logger.addHandler(file_handler)
 
@@ -81,7 +81,7 @@ class User:
     def __init__(self, user):
         self.id = None
         self.description = ""
-        # followers_friends_ratio = |Followers|/|Friends|
+        # followers_friends_ratio = |Friends|/|Followers|
         # friends sind Accounts, denen ein User folgt. Wenn 0, setze ratio auf |Followers|
         self.followers_friends_ratio = 0.0
         # has_profile_url = Ob im Profil eine URL angegeben wurde
@@ -103,7 +103,7 @@ class User:
         self.id = user.id
         if user.description:
             self.description = user.description
-        if user.friends_count == 0:
+        if user.followers_count == 0:
             self.followers_friends_ratio = user.followers_count
         else:
             self.followers_friends_ratio = user.friends_count/user.followers_count
